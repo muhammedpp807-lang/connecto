@@ -42,7 +42,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
 }) => {
   const { profile } = useAuth();
   const { showToast, settings } = useNotifications();
-  const { chatBackground } = useTheme();
+  const { chatBackground, customChatWallpaper, chatWallpaperBlur, chatWallpaperBrightness } = useTheme();
   const isOnline = useNetworkStatus();
 
   const [messages, setMessages] = useState<Message[]>([]);
@@ -294,8 +294,20 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
       {/* Messages Scroll Area with customizable wallpaper */}
       <div
         ref={scrollContainerRef}
-        className={`flex-1 overflow-y-auto p-4 sm:p-6 space-y-2 transition-colors ${
-          chatBackground === 'doodle'
+        style={
+          customChatWallpaper
+            ? {
+                backgroundImage: `url(${customChatWallpaper})`,
+                backgroundSize: 'cover',
+                backgroundPosition: 'center',
+                filter: `blur(${chatWallpaperBlur}px) brightness(${chatWallpaperBrightness}%)`,
+              }
+            : undefined
+        }
+        className={`flex-1 overflow-y-auto p-4 sm:p-6 space-y-2 transition-colors relative ${
+          customChatWallpaper
+            ? ''
+            : chatBackground === 'doodle'
             ? 'bg-[#e5ddd5] dark:bg-[#0d1418] bg-[radial-gradient(#9ca3af_1.5px,transparent_1.5px)] dark:bg-[radial-gradient(#374151_1.5px,transparent_1.5px)] [background-size:24px_24px]'
             : chatBackground === 'subtle_dots'
             ? 'bg-slate-100 dark:bg-[#12161f] bg-[radial-gradient(#64748b_1.2px,transparent_1.2px)] [background-size:16px_16px]'
@@ -307,6 +319,10 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
             ? 'bg-gradient-to-b from-emerald-50 to-teal-50 dark:from-emerald-950/20 dark:to-teal-950/20'
             : chatBackground === 'midnight'
             ? 'bg-gradient-to-b from-slate-950 to-indigo-950 text-white'
+            : chatBackground === 'cyber_neon'
+            ? 'bg-slate-950 bg-[radial-gradient(#06b6d4_1px,transparent_1px)] [background-size:24px_24px] text-white'
+            : chatBackground === 'starry_sky'
+            ? 'bg-[#050814] bg-[radial-gradient(#818cf8_1px,transparent_1px)] [background-size:32px_32px] text-white'
             : 'bg-[radial-gradient(#cbd5e1_1px,transparent_1px)] dark:bg-[radial-gradient(#1e293b_1px,transparent_1px)] [background-size:20px_20px]'
         }`}
       >

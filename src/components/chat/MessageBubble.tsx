@@ -6,6 +6,7 @@ import { addMessageReaction, deleteMessageForEveryone, deleteMessageForMe } from
 import { DeleteMessageModal } from './DeleteMessageModal';
 import { AudioMessagePlayer } from './AudioMessagePlayer';
 import { useNotifications } from '../../contexts/NotificationContext';
+import { useTheme } from '../../contexts/ThemeContext';
 
 interface MessageBubbleProps {
   message: Message;
@@ -49,6 +50,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   const [showReactionPicker, setShowReactionPicker] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const { showToast } = useNotifications();
+  const { bubbleSettings, colorConfig } = useTheme();
 
   // If deleted for current user only, hide completely
   if (message.deletedForUsers && message.deletedForUsers.includes(currentUserId)) {
@@ -93,6 +95,68 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
 
   const senderColor = getSenderColor(message.senderName);
 
+  // Compute bubble corner radius class
+  const getRadiusClass = () => {
+    switch (bubbleSettings.radius) {
+      case 'sharp':
+        return isMe ? 'rounded-none' : 'rounded-none';
+      case 'subtle':
+        return isMe ? 'rounded-lg rounded-tr-none' : 'rounded-lg rounded-tl-none';
+      case 'extra-round':
+        return isMe ? 'rounded-3xl rounded-tr-none' : 'rounded-3xl rounded-tl-none';
+      case 'pill':
+        return isMe ? 'rounded-[28px] rounded-tr-none' : 'rounded-[28px] rounded-tl-none';
+      case 'rounded':
+      default:
+        return isMe ? 'rounded-2xl rounded-tr-none' : 'rounded-2xl rounded-tl-none';
+    }
+  };
+
+  // Compute font size class
+  const getFontSizeClass = () => {
+    switch (bubbleSettings.fontSize) {
+      case 'small':
+        return 'text-xs leading-relaxed';
+      case 'large':
+        return 'text-base leading-relaxed';
+      case 'extra-large':
+        return 'text-lg leading-relaxed';
+      case 'medium':
+      default:
+        return 'text-sm leading-relaxed';
+    }
+  };
+
+  // Compute outgoing bubble color scheme
+  const getOutgoingColorClass = () => {
+    switch (bubbleSettings.colorScheme) {
+      case 'emerald':
+        return 'bg-emerald-600 dark:bg-emerald-600 text-white shadow-emerald-950/20';
+      case 'blue':
+        return 'bg-blue-600 dark:bg-blue-600 text-white shadow-blue-950/20';
+      case 'purple':
+        return 'bg-purple-600 dark:bg-purple-600 text-white shadow-purple-950/20';
+      case 'midnight':
+        return 'bg-slate-900 dark:bg-[#12161f] text-white border border-slate-700/60';
+      case 'sunset':
+        return 'bg-gradient-to-r from-rose-500 to-amber-500 text-white';
+      case 'cyber':
+        return 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white';
+      case 'monochrome':
+        return 'bg-slate-800 dark:bg-slate-700 text-white';
+      case 'theme':
+      default:
+        return `${colorConfig.bgClass} text-white ${colorConfig.glowClass}`;
+    }
+  };
+
+  const bubbleRadiusClass = getRadiusClass();
+  const fontSizeClass = getFontSizeClass();
+  const outgoingColorClass = getOutgoingColorClass();
+  const opacityStyle = bubbleSettings.bubbleOpacity < 100 
+    ? { opacity: bubbleSettings.bubbleOpacity / 100 } 
+    : undefined;
+
   // Deleted For Everyone Message View (WhatsApp style)
   if (message.deletedForEveryone) {
     return (
@@ -119,7 +183,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
 
   return (
     <div
-      className={`group relative flex flex-col ${isMe ? 'items-end' : 'items-start'} my-1.5 px-2`}
+      className={`group relative flex flex-col ${isMe ? 'items-end' : 'items-start'} ${bubbleSettings.densePadding ? 'my-0.5' : 'my-1.5'} px-2`}
       id={`msg-bubble-${message.id}`}
     >
       {/* Quick Reaction Bar (on hover/action) */}
@@ -153,10 +217,13 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
 
       {/* Bubble Container */}
       <div
-        className={`relative max-w-[85%] sm:max-w-md px-4 py-2.5 rounded-2xl shadow-xs transition-colors ${
+        style={opacityStyle}
+        className={`relative max-w-[85%] sm:max-w-md ${
+          bubbleSettings.densePadding ? 'px-3 py-1.5' : 'px-4 py-2.5'
+        } ${bubbleRadiusClass} shadow-xs transition-all duration-150 ${
           isMe
-            ? 'bg-blue-600 dark:bg-blue-600 text-white rounded-tr-none shadow-md shadow-blue-900/10'
-            : 'bg-white dark:bg-[#161b22] text-slate-800 dark:text-slate-200 border border-slate-200/80 dark:border-[#1e2530] rounded-tl-none shadow-xs'
+            ? `${outgoingColorClass} shadow-md`
+            : 'bg-white dark:bg-[#161b22] text-slate-800 dark:text-slate-200 border border-slate-200/80 dark:border-[#1e2530] shadow-xs'
         }`}
       >
         {/* In group chats, display sender name for incoming messages */}
@@ -229,7 +296,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
 
         {/* Text Content (or image/video caption) */}
         {message.text && (
-          <p className="text-sm whitespace-pre-wrap break-words leading-relaxed">
+          <p className={`${fontSizeClass} whitespace-pre-wrap break-words`}>
             {message.text}
           </p>
         )}
@@ -239,7 +306,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
           <div
             className={`flex items-center gap-3 p-2.5 rounded-xl my-1 border ${
               isMe 
-                ? 'bg-blue-700/60 border-blue-500/40 text-white' 
+                ? 'bg-white/10 border-white/20 text-white' 
                 : 'bg-slate-50 dark:bg-[#0d1117] border-slate-200 dark:border-[#1e2530]'
             }`}
           >
@@ -248,7 +315,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-xs font-semibold truncate">{message.fileName || 'Attachment'}</p>
-              <p className={`text-[10px] ${isMe ? 'text-blue-100' : 'text-slate-400'}`}>
+              <p className={`text-[10px] ${isMe ? 'text-white/80' : 'text-slate-400'}`}>
                 {formatFileSize(message.fileSize)}
               </p>
             </div>
@@ -271,7 +338,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
         {/* Metadata Footer: Timestamp & Read Status */}
         <div
           className={`flex items-center justify-end gap-1.5 mt-1 text-[10px] ${
-            isMe ? 'text-blue-100' : 'text-slate-400 dark:text-slate-500'
+            isMe ? 'text-white/80' : 'text-slate-400 dark:text-slate-500'
           }`}
         >
           <span>{formatTime(message.createdAt)}</span>
@@ -280,9 +347,9 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
               {message.read ? (
                 <CheckCheck className="w-3.5 h-3.5 text-cyan-200" />
               ) : message.delivered ? (
-                <CheckCheck className="w-3.5 h-3.5 text-blue-200" />
+                <CheckCheck className="w-3.5 h-3.5 text-white/90" />
               ) : (
-                <Check className="w-3.5 h-3.5 text-blue-200" />
+                <Check className="w-3.5 h-3.5 text-white/90" />
               )}
             </span>
           )}
@@ -311,4 +378,5 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
     </div>
   );
 };
+
 

@@ -73,11 +73,68 @@ export interface ToastNotification {
   message: string;
 }
 
+export type ThemeColor = 'blue' | 'emerald' | 'purple' | 'amber' | 'rose' | 'cyan' | 'indigo' | 'orange' | 'teal' | 'crimson';
+export type BubbleRadius = 'sharp' | 'subtle' | 'rounded' | 'extra-round' | 'pill';
+export type BubbleFontSize = 'small' | 'medium' | 'large' | 'extra-large';
+export type BubbleColorScheme = 'theme' | 'emerald' | 'blue' | 'purple' | 'midnight' | 'sunset' | 'cyber' | 'monochrome';
+
+export interface BubbleSettings {
+  radius: BubbleRadius;
+  fontSize: BubbleFontSize;
+  colorScheme: BubbleColorScheme;
+  bubbleOpacity: number; // 60 - 100
+  densePadding: boolean;
+}
+
+export interface StatusViewer {
+  userId: string;
+  userName: string;
+  userAvatar?: string;
+  viewedAt: number;
+}
+
+export type StatusExpiryOption = '1h' | '6h' | '12h' | '24h' | '48h' | '7d' | '30d' | 'never';
+
+export interface StatusItem {
+  id: string;
+  userId: string;
+  userName: string;
+  userAvatar?: string;
+  userUsername?: string;
+  type: 'video' | 'image' | 'text';
+  mediaUrl?: string;
+  caption?: string;
+  filter?: 'normal' | 'warm' | 'monochrome' | 'vivid' | 'cyber' | 'sunset';
+  textBackground?: string;
+  textColor?: string;
+  duration?: number;
+  isMuted?: boolean;
+  viewers?: StatusViewer[];
+  createdAt: number;
+  expiresAt: number; // 0 for never / permanent, or future timestamp ms
+  expiryOption?: StatusExpiryOption;
+}
+
+export interface UserStatusGroup {
+  userId: string;
+  userName: string;
+  userAvatar?: string;
+  userUsername?: string;
+  statuses: StatusItem[];
+  hasUnseen: boolean;
+  lastUpdated: number;
+}
+
 export interface UserSettings {
   appearance: 'light' | 'dark' | 'system';
-  themeColor?: 'blue' | 'emerald' | 'purple' | 'rose' | 'amber' | 'indigo' | 'cyan';
-  chatBackground?: 'default' | 'doodle' | 'dark-mesh' | 'geometric' | 'gradient-warm' | 'solid-slate' | 'solid-emerald' | 'solid-midnight';
-  appBackground?: 'default' | 'minimal' | 'midnight' | 'warm' | 'emerald';
+  themeColor?: ThemeColor;
+  chatBackground?: string;
+  appBackground?: string;
+  customAppWallpaper?: string;
+  customChatWallpaper?: string;
+  chatWallpaperBlur?: number;
+  chatWallpaperBrightness?: number;
+  bubbleSettings?: BubbleSettings;
   sounds: boolean;
   browserNotifications: boolean;
   readReceipts: boolean;

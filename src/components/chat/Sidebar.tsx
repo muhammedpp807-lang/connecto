@@ -10,6 +10,7 @@ import { Logo } from '../common/Logo';
 import { formatConversationDate } from '../../utils/dateUtils';
 import { NewChatModal } from './NewChatModal';
 import { CreateGroupModal } from './CreateGroupModal';
+import { StatusBar } from '../status/StatusBar';
 import { 
   MessageSquarePlus, 
   Users, 
@@ -217,6 +218,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ onSelectConversation, selected
           </button>
         </div>
       )}
+
+      {/* Stories / Status Bar Row */}
+      <StatusBar />
 
       {/* Search Filter Box */}
       <div className="p-3 space-y-2">
