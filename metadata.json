@@ -1,0 +1,6 @@
+{
+  "name": "Connecto",
+  "description": "A modern real-time messaging platform to connect, chat, and share seamlessly across devices.",
+  "requestFramePermissions": ["microphone", "camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
