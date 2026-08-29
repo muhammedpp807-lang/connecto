@@ -122,6 +122,10 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
   };
 
   const openImageInEditor = (file: File | Blob) => {
+    if (file.size > 100 * 1024 * 1024) {
+      showToast('error', 'Image exceeds the maximum allowed size of 100MB.');
+      return;
+    }
     const reader = new FileReader();
     reader.onload = () => {
       setMediaToEdit({
@@ -135,6 +139,10 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
   };
 
   const openVideoInEditor = (file: File) => {
+    if (file.size > 100 * 1024 * 1024) {
+      showToast('error', 'Video exceeds the maximum allowed size of 100MB.');
+      return;
+    }
     const previewUrl = URL.createObjectURL(file);
     setMediaToEdit({
       file,
@@ -256,6 +264,11 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
     if (!file) return;
     e.target.value = '';
     setShowAttachmentMenu(false);
+
+    if (file.size > 100 * 1024 * 1024) {
+      showToast('error', 'File size exceeds the maximum limit of 100MB.');
+      return;
+    }
 
     if (file.type.startsWith('image/')) {
       openImageInEditor(file);

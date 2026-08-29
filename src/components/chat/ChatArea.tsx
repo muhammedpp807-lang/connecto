@@ -112,6 +112,12 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
     if (!files || files.length === 0) return;
 
     const file = files[0];
+
+    if (file.size > 100 * 1024 * 1024) {
+      showToast('error', 'File exceeds the maximum allowed size of 100MB.');
+      return;
+    }
+
     const isImage = file.type.startsWith('image/');
     const isVideo = file.type.startsWith('video/');
 

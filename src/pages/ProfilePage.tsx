@@ -38,8 +38,8 @@ export const ProfilePage: React.FC = () => {
     const file = e.target.files?.[0];
     if (!file || !profile) return;
 
-    if (file.size > 5 * 1024 * 1024) {
-      showToast('error', 'Avatar image must be under 5MB.');
+    if (file.size > 100 * 1024 * 1024) {
+      showToast('error', 'Avatar image must be under 100MB.');
       return;
     }
 

@@ -27,9 +27,9 @@ export const uploadMediaFile = async (
     try {
       if (onProgress) onProgress(20);
       const compressed = await compressImageFile(file, {
-        maxWidth: 1280,
-        maxHeight: 1280,
-        quality: 0.82
+        maxWidth: 2048,
+        maxHeight: 2048,
+        quality: 0.85
       });
       compressedDataUrl = compressed.dataUrl;
       uploadPayload = compressed.blob;
@@ -39,7 +39,7 @@ export const uploadMediaFile = async (
     }
   }
 
-  // If Firebase Storage is initialized, attempt upload with a fast timeout
+  // If Firebase Storage is initialized, attempt upload with an adaptive timeout
   if (isFirebaseConfigured && storage) {
     try {
       const storagePromise = new Promise<string>((resolve, reject) => {
@@ -69,11 +69,12 @@ export const uploadMediaFile = async (
         );
       });
 
-      // Strict 2.5s timeout for storage upload so user never hangs
+      // Adaptive timeout based on payload size (up to 100MB support)
+      const timeoutMs = Math.max(8000, Math.min(120000, Math.round((file.size || 1024) / 15000)));
       const result = await Promise.race([
         storagePromise,
         new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('Storage upload timeout')), 2500)
+          setTimeout(() => reject(new Error('Storage upload timeout')), timeoutMs)
         )
       ]);
 
