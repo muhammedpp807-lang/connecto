@@ -15,7 +15,9 @@ import {
   Clock,
   Infinity as InfinityIcon,
   Check,
-  Edit3
+  Edit3,
+  Maximize2,
+  Minimize2
 } from 'lucide-react';
 import { StatusItem, UserStatusGroup, StatusExpiryOption } from '../../types';
 import { useAuth } from '../../contexts/AuthContext';
@@ -62,6 +64,7 @@ export const StatusViewerModal: React.FC<StatusViewerModalProps> = ({
   const [statusIndex, setStatusIndex] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
+  const [isFillMode, setIsFillMode] = useState(false);
   const [progress, setProgress] = useState(0); // 0 to 100
   const [replyText, setReplyText] = useState('');
   const [isSendingReply, setIsSendingReply] = useState(false);
@@ -188,7 +191,10 @@ export const StatusViewerModal: React.FC<StatusViewerModalProps> = ({
       if (currentGroup.statuses.length <= 1) {
         onClose();
       } else {
-        handleNext();
+        if (statusIndex >= currentGroup.statuses.length - 1) {
+          setStatusIndex(Math.max(0, currentGroup.statuses.length - 2));
+        }
+        setProgress(0);
       }
     } catch {
       showToast('error', 'Failed to delete status');
@@ -240,18 +246,41 @@ export const StatusViewerModal: React.FC<StatusViewerModalProps> = ({
 
   return (
     <div 
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-md p-0 sm:p-4 select-none animate-in fade-in"
+      className="fixed inset-0 z-50 w-full h-full bg-black flex flex-col justify-between overflow-hidden select-none animate-in fade-in"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
       
-      {/* Navigation Arrows for Desktop */}
+      {/* 1. Ambient Blurred Backdrop for Full-Screen Media Atmosphere */}
+      {currentStatus.type === 'image' && currentStatus.mediaUrl && (
+        <div 
+          className="absolute inset-0 bg-cover bg-center blur-3xl opacity-30 scale-110 pointer-events-none transition-all duration-700"
+          style={{ backgroundImage: `url(${currentStatus.mediaUrl})` }}
+        />
+      )}
+      {currentStatus.type === 'video' && currentStatus.mediaUrl && (
+        <video 
+          src={currentStatus.mediaUrl}
+          muted
+          loop
+          autoPlay
+          playsInline
+          className="absolute inset-0 w-full h-full object-cover blur-3xl opacity-25 scale-125 pointer-events-none transition-all duration-700"
+        />
+      )}
+      {currentStatus.type === 'text' && (
+        <div 
+          className={`absolute inset-0 ${currentStatus.textBackground || 'bg-gradient-to-tr from-purple-900 to-indigo-950'} opacity-40 blur-2xl pointer-events-none`}
+        />
+      )}
+
+      {/* 2. Navigation Arrows for Desktop */}
       {groupIndex > 0 || statusIndex > 0 ? (
         <button
           type="button"
           onClick={handlePrev}
-          className="hidden md:flex absolute left-8 top-1/2 -translate-y-1/2 p-3 rounded-full bg-white/10 hover:bg-white/20 text-white backdrop-blur-md transition cursor-pointer z-30 shadow-lg"
+          className="hidden md:flex absolute left-6 top-1/2 -translate-y-1/2 p-3.5 rounded-full bg-black/60 hover:bg-black/80 text-white backdrop-blur-md border border-white/15 transition cursor-pointer z-40 shadow-xl hover:scale-110 active:scale-95"
           title="Previous status (Left Arrow)"
         >
           <ChevronLeft className="w-6 h-6" />
@@ -262,16 +291,16 @@ export const StatusViewerModal: React.FC<StatusViewerModalProps> = ({
         <button
           type="button"
           onClick={handleNext}
-          className="hidden md:flex absolute right-8 top-1/2 -translate-y-1/2 p-3 rounded-full bg-white/10 hover:bg-white/20 text-white backdrop-blur-md transition cursor-pointer z-30 shadow-lg"
+          className="hidden md:flex absolute right-6 top-1/2 -translate-y-1/2 p-3.5 rounded-full bg-black/60 hover:bg-black/80 text-white backdrop-blur-md border border-white/15 transition cursor-pointer z-40 shadow-xl hover:scale-110 active:scale-95"
           title="Next status (Right Arrow)"
         >
           <ChevronRight className="w-6 h-6" />
         </button>
       ) : null}
 
-      {/* Main Story Container (Centered) */}
+      {/* 3. Main Story Fullscreen Container */}
       <div 
-        className="relative w-full sm:max-w-md h-full sm:h-[90vh] bg-black sm:rounded-3xl overflow-hidden flex flex-col justify-between shadow-2xl border border-white/10 mx-auto"
+        className="relative w-full h-full max-w-2xl sm:max-w-3xl md:max-w-4xl mx-auto flex flex-col justify-between z-20 shadow-2xl"
         onMouseDown={() => setIsPaused(true)}
         onMouseUp={() => setIsPaused(false)}
         onTouchStart={() => setIsPaused(true)}
@@ -279,7 +308,8 @@ export const StatusViewerModal: React.FC<StatusViewerModalProps> = ({
       >
         
         {/* Top Header & Segmented Progress Bars */}
-        <div className="absolute top-0 inset-x-0 z-30 p-4 bg-gradient-to-b from-black/85 via-black/45 to-transparent space-y-3">
+        <div className="absolute top-0 inset-x-0 z-30 p-3 sm:p-5 bg-gradient-to-b from-black/90 via-black/50 to-transparent space-y-2.5 sm:space-y-3">
+          
           {/* Segmented Progress Bars */}
           <div className="flex items-center gap-1.5 w-full">
             {currentGroup.statuses.map((item, idx) => {
@@ -291,10 +321,10 @@ export const StatusViewerModal: React.FC<StatusViewerModalProps> = ({
               return (
                 <div
                   key={item.id}
-                  className="flex-1 h-1 bg-white/30 rounded-full overflow-hidden"
+                  className="flex-1 h-1 sm:h-1.5 bg-white/25 rounded-full overflow-hidden backdrop-blur-xs"
                 >
                   <div
-                    className="h-full bg-white transition-all duration-75"
+                    className="h-full bg-white transition-all duration-75 rounded-full"
                     style={{ width: `${fillPercent}%` }}
                   />
                 </div>
@@ -302,77 +332,99 @@ export const StatusViewerModal: React.FC<StatusViewerModalProps> = ({
             })}
           </div>
 
-          {/* User Info Bar */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
+          {/* User Info Bar & Actions */}
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
               <Avatar
                 src={currentGroup.userAvatar}
                 name={currentGroup.userName}
-                size="sm"
+                size="md"
               />
-              <div>
-                <p className="text-xs font-bold text-white leading-tight flex items-center gap-1.5">
-                  {currentGroup.userName}
+              <div className="min-w-0">
+                <p className="text-xs sm:text-sm font-bold text-white leading-tight flex items-center gap-2 truncate">
+                  <span className="truncate">{currentGroup.userName}</span>
                   {isMe && (
-                    <span className="text-[10px] px-1.5 py-0.2 bg-emerald-500/20 text-emerald-300 rounded-full font-normal">
+                    <span className="text-[10px] px-2 py-0.5 bg-emerald-500/25 text-emerald-300 rounded-full font-semibold border border-emerald-500/40 shrink-0">
                       You
                     </span>
                   )}
                 </p>
-                <p className="text-[10px] text-white/70">
+                <p className="text-[10px] sm:text-xs text-white/70">
                   {formatTime(currentStatus.createdAt)}
                 </p>
               </div>
             </div>
 
-            {/* Actions: Pause, Mute, Delete, Close */}
-            <div className="flex items-center gap-1">
+            {/* Actions: Fullscreen Fill, Mute, Delete, Close */}
+            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+              
+              {/* Toggle Fit / Fill */}
+              {(currentStatus.type === 'video' || currentStatus.type === 'image') && (
+                <button
+                  type="button"
+                  onClick={() => setIsFillMode(!isFillMode)}
+                  className="p-2 rounded-full text-white/80 hover:text-white hover:bg-white/15 transition cursor-pointer backdrop-blur-xs"
+                  title={isFillMode ? 'Fit to Screen' : 'Fill Screen'}
+                >
+                  {isFillMode ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+                </button>
+              )}
+
+              {/* Video Audio Mute Toggle */}
               {currentStatus.type === 'video' && (
                 <button
                   type="button"
                   onClick={() => setIsMuted(!isMuted)}
-                  className="p-2 rounded-full text-white/80 hover:text-white hover:bg-white/10 transition cursor-pointer"
+                  className="p-2 rounded-full text-white/80 hover:text-white hover:bg-white/15 transition cursor-pointer backdrop-blur-xs"
+                  title={isMuted ? 'Unmute' : 'Mute'}
                 >
-                  {isMuted ? <VolumeX className="w-4 h-4 text-rose-400" /> : <Volume2 className="w-4 h-4" />}
+                  {isMuted ? <VolumeX className="w-4 h-4 text-rose-400" /> : <Volume2 className="w-4 h-4 text-emerald-400" />}
                 </button>
               )}
 
+              {/* Prominent Delete Button for Own Status */}
               {isMe && (
                 <button
                   type="button"
                   onClick={handleDelete}
                   disabled={isDeleting}
-                  className="p-2 rounded-full text-rose-400 hover:text-white hover:bg-rose-600/30 transition cursor-pointer"
-                  title="Delete this status instantly"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-rose-600/30 hover:bg-rose-600 text-rose-300 hover:text-white border border-rose-500/50 backdrop-blur-md text-xs font-bold transition shadow-md hover:scale-105 active:scale-95 cursor-pointer disabled:opacity-50"
+                  title="Delete your status instantly"
                 >
-                  <Trash2 className="w-4 h-4" />
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Delete</span>
                 </button>
               )}
 
+              {/* Top Close Button */}
               <button
                 type="button"
                 onClick={onClose}
-                className="p-2 rounded-full text-white/80 hover:text-white hover:bg-white/10 transition cursor-pointer"
-                title="Close (Esc)"
+                className="p-2 sm:p-2.5 rounded-full bg-black/50 hover:bg-rose-600/90 text-white backdrop-blur-md border border-white/20 shadow-md transition transform hover:scale-105 active:scale-95 cursor-pointer flex items-center justify-center"
+                title="Close Status (Esc)"
+                aria-label="Close Status"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4 sm:w-5 sm:h-5" />
               </button>
             </div>
           </div>
         </div>
 
-        {/* Media Content Display */}
-        <div className="flex-1 relative flex items-center justify-center overflow-hidden">
-          {/* Tap Zones for Mobile Navigation */}
+        {/* Media Content Display (Fullscreen) */}
+        <div className="flex-1 w-full h-full relative flex items-center justify-center overflow-hidden">
+          {/* Tap Zones for Navigation */}
           <div 
             className="absolute inset-y-0 left-0 w-1/3 z-20 cursor-pointer" 
             onClick={(e) => { e.stopPropagation(); handlePrev(); }}
+            title="Previous"
           />
           <div 
             className="absolute inset-y-0 right-0 w-1/3 z-20 cursor-pointer" 
             onClick={(e) => { e.stopPropagation(); handleNext(); }}
+            title="Next"
           />
 
+          {/* Video Player */}
           {currentStatus.type === 'video' && (
             <video
               ref={videoRef}
@@ -381,21 +433,23 @@ export const StatusViewerModal: React.FC<StatusViewerModalProps> = ({
               playsInline
               muted={isMuted}
               loop
-              className="w-full h-full object-contain"
+              className={`w-full h-full transition-all duration-300 ${isFillMode ? 'object-cover' : 'object-contain'} ${currentStatus.filter || ''}`}
             />
           )}
 
+          {/* Image Viewer */}
           {currentStatus.type === 'image' && (
             <img
               src={currentStatus.mediaUrl}
               alt="Status"
-              className="w-full h-full object-contain"
+              className={`w-full h-full transition-all duration-300 ${isFillMode ? 'object-cover' : 'object-contain'} ${currentStatus.filter || ''}`}
             />
           )}
 
+          {/* Text Story Canvas (Fullscreen fulfillment) */}
           {currentStatus.type === 'text' && (
-            <div className={`w-full h-full p-8 flex items-center justify-center text-center ${currentStatus.textBackground || 'bg-gradient-to-tr from-blue-600 to-indigo-700'}`}>
-              <p className="text-white font-bold text-xl sm:text-2xl leading-relaxed max-w-sm drop-shadow-md">
+            <div className={`w-full h-full p-8 sm:p-14 flex items-center justify-center text-center ${currentStatus.textBackground || 'bg-gradient-to-tr from-purple-600 via-indigo-600 to-blue-700'}`}>
+              <p className="text-white font-bold text-2xl sm:text-3xl md:text-4xl leading-relaxed max-w-xl drop-shadow-lg animate-in zoom-in-95">
                 {currentStatus.caption}
               </p>
             </div>
@@ -403,8 +457,8 @@ export const StatusViewerModal: React.FC<StatusViewerModalProps> = ({
 
           {/* Caption Overlay for Image/Video */}
           {currentStatus.type !== 'text' && currentStatus.caption && (
-            <div className="absolute bottom-16 inset-x-0 p-4 bg-gradient-to-t from-black/80 via-black/40 to-transparent text-center z-20">
-              <p className="text-xs sm:text-sm font-medium text-white max-w-xs mx-auto drop-shadow-sm">
+            <div className="absolute bottom-16 sm:bottom-20 inset-x-0 p-4 sm:p-6 bg-gradient-to-t from-black/85 via-black/50 to-transparent text-center z-20 pointer-events-none">
+              <p className="text-sm sm:text-base font-medium text-white max-w-md mx-auto drop-shadow-md bg-black/40 px-4 py-2 rounded-2xl backdrop-blur-xs inline-block">
                 {currentStatus.caption}
               </p>
             </div>
@@ -412,7 +466,7 @@ export const StatusViewerModal: React.FC<StatusViewerModalProps> = ({
         </div>
 
         {/* Bottom Bar: Viewers List / Expiry Info for Own Status OR Reply Input for Others */}
-        <div className="p-4 bg-gradient-to-t from-black/95 via-black/70 to-transparent z-30">
+        <div className="p-3 sm:p-5 bg-gradient-to-t from-black/95 via-black/70 to-transparent z-30">
           {isMe ? (
             <div className="flex items-center justify-between gap-2">
               <button
@@ -421,49 +475,62 @@ export const StatusViewerModal: React.FC<StatusViewerModalProps> = ({
                   setShowViewersList(!showViewersList);
                   setShowExpiryMenu(false);
                 }}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/15 hover:bg-white/25 text-white text-xs font-semibold backdrop-blur-md transition cursor-pointer"
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-white/15 hover:bg-white/25 text-white text-xs font-semibold backdrop-blur-md transition cursor-pointer"
               >
-                <Eye className="w-3.5 h-3.5" />
+                <Eye className="w-4 h-4 text-emerald-400" />
                 <span>{currentStatus.viewers?.length || 0} Views</span>
               </button>
 
-              {/* Status Expiration Badge / Edit Button */}
-              <button
-                type="button"
-                onClick={() => {
-                  setShowExpiryMenu(!showExpiryMenu);
-                  setShowViewersList(false);
-                }}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-emerald-300 text-xs font-medium backdrop-blur-md transition cursor-pointer"
-                title="Click to change expiration time"
-              >
-                {currentStatus.expiresAt === 0 ? (
-                  <>
-                    <InfinityIcon className="w-3.5 h-3.5 text-purple-300" />
-                    <span className="text-purple-200">Never expires</span>
-                  </>
-                ) : (
-                  <>
-                    <Clock className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>{formatStatusTimeRemaining(currentStatus.expiresAt)}</span>
-                  </>
-                )}
-                <Edit3 className="w-3 h-3 text-white/50 ml-0.5" />
-              </button>
+              <div className="flex items-center gap-2">
+                {/* Status Expiration Badge / Edit Button */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowExpiryMenu(!showExpiryMenu);
+                    setShowViewersList(false);
+                  }}
+                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-white/10 hover:bg-white/20 text-emerald-300 text-xs font-medium backdrop-blur-md transition cursor-pointer"
+                  title="Click to change expiration time"
+                >
+                  {currentStatus.expiresAt === 0 ? (
+                    <>
+                      <InfinityIcon className="w-4 h-4 text-purple-300" />
+                      <span className="text-purple-200">Never expires</span>
+                    </>
+                  ) : (
+                    <>
+                      <Clock className="w-4 h-4 text-emerald-400" />
+                      <span>{formatStatusTimeRemaining(currentStatus.expiresAt)}</span>
+                    </>
+                  )}
+                  <Edit3 className="w-3.5 h-3.5 text-white/50 ml-0.5" />
+                </button>
+
+                {/* Mobile Delete Button */}
+                <button
+                  type="button"
+                  onClick={handleDelete}
+                  disabled={isDeleting}
+                  className="sm:hidden p-2 rounded-full bg-rose-600/30 text-rose-300 hover:text-white border border-rose-500/40"
+                  title="Delete status"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
             </div>
           ) : (
-            <form onSubmit={handleSendReply} className="flex items-center gap-2">
+            <form onSubmit={handleSendReply} className="flex items-center gap-2 max-w-xl mx-auto w-full">
               <input
                 type="text"
                 value={replyText}
                 onChange={(e) => setReplyText(e.target.value)}
                 placeholder={`Reply to ${currentGroup.userName}...`}
-                className="flex-1 px-4 py-2.5 rounded-full bg-white/15 backdrop-blur-md border border-white/20 text-xs text-white placeholder:text-white/60 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                className="flex-1 px-4 py-3 rounded-full bg-white/15 backdrop-blur-md border border-white/20 text-xs sm:text-sm text-white placeholder:text-white/60 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
               />
               <button
                 type="submit"
                 disabled={!replyText.trim() || isSendingReply}
-                className="p-2.5 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white shadow-md transition disabled:opacity-40 cursor-pointer"
+                className="p-3 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white shadow-md transition disabled:opacity-40 cursor-pointer"
                 title="Send reply"
               >
                 <Send className="w-4 h-4" />
@@ -474,7 +541,7 @@ export const StatusViewerModal: React.FC<StatusViewerModalProps> = ({
 
         {/* Change Expiry Bottom Sheet */}
         {showExpiryMenu && isMe && (
-          <div className="absolute inset-x-0 bottom-0 bg-[#161b22] border-t border-slate-700 rounded-t-3xl p-5 z-40 space-y-3.5 animate-in slide-in-from-bottom shadow-2xl">
+          <div className="absolute inset-x-0 bottom-0 bg-[#161b22] border-t border-slate-700 rounded-t-3xl p-5 z-40 space-y-3.5 animate-in slide-in-from-bottom shadow-2xl max-w-xl mx-auto">
             <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
               <div className="flex items-center gap-2">
                 <Clock className="w-4 h-4 text-emerald-400" />
@@ -521,7 +588,7 @@ export const StatusViewerModal: React.FC<StatusViewerModalProps> = ({
 
         {/* Viewers Sheet (when toggled for own status) */}
         {showViewersList && (
-          <div className="absolute inset-x-0 bottom-0 max-h-[60%] bg-[#161b22] border-t border-slate-700 rounded-t-3xl p-5 z-40 space-y-4 animate-in slide-in-from-bottom overflow-y-auto">
+          <div className="absolute inset-x-0 bottom-0 max-h-[60%] bg-[#161b22] border-t border-slate-700 rounded-t-3xl p-5 z-40 space-y-4 animate-in slide-in-from-bottom overflow-y-auto max-w-xl mx-auto">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <div className="flex items-center gap-2">
                 <Users className="w-4 h-4 text-emerald-400" />
@@ -570,4 +637,5 @@ export const StatusViewerModal: React.FC<StatusViewerModalProps> = ({
     </div>
   );
 };
+
 

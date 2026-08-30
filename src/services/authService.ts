@@ -11,6 +11,7 @@ import {
   checkUsernameAvailable, 
   createUserProfile, 
   getUserProfile, 
+  getUserByUsernameOrEmail,
   setUserOnlineStatus, 
   updateUserProfile 
 } from './userService';
@@ -58,11 +59,11 @@ function saveCredential(identifier: string, pass: string) {
   }
 }
 
-function withTimeout<T>(promise: Promise<T>, ms = 2500): Promise<T> {
+function withTimeout<T>(promise: Promise<T>, ms = 4000): Promise<T> {
   return Promise.race([
     promise,
     new Promise<T>((_, reject) =>
-      setTimeout(() => reject(new Error('Firebase auth timeout')), ms)
+      setTimeout(() => reject(new Error('Firebase operation timed out')), ms)
     )
   ]);
 }
@@ -83,10 +84,10 @@ export const registerUser = async (params: RegisterParams): Promise<UserProfile>
     try {
       const userCredential = await withTimeout(
         createUserWithEmailAndPassword(auth, cleanEmail, password),
-        2500
+        5000
       );
       uid = userCredential.user.uid;
-      withTimeout(updateProfile(userCredential.user, { displayName }), 1500).catch(() => {});
+      withTimeout(updateProfile(userCredential.user, { displayName }), 2000).catch(() => {});
     } catch (err: unknown) {
       console.warn('Firebase Auth registration note:', err);
       const fbErr = err as { code?: string; message?: string };
@@ -122,7 +123,14 @@ export const loginUser = async (params: LoginParams): Promise<UserProfile> => {
   const { emailOrUsername, password } = params;
   const cleanInput = emailOrUsername.toLowerCase().trim();
 
-  // Special Admin Authentication: connecto / M#@7,2.3/!pp
+  if (!cleanInput) {
+    throw new Error('Please enter your email or username.');
+  }
+  if (!password) {
+    throw new Error('Please enter your password.');
+  }
+
+  // 1. Special Admin Authentication: connecto / M#@7,2.3/!pp
   if (
     (cleanInput === 'connecto' || cleanInput === 'connecto@connecto.app') &&
     password === 'M#@7,2.3/!pp'
@@ -156,48 +164,87 @@ export const loginUser = async (params: LoginParams): Promise<UserProfile> => {
     return adminProfile;
   }
 
-  // 1. Check local accounts
-  const rawUsers = localStorage.getItem('connecto_db_users');
-  let users: UserProfile[] = [];
-  if (rawUsers) {
-    try {
-      users = JSON.parse(rawUsers);
-    } catch {
-      users = [];
+  // 2. Look up user by username OR email from Firestore and local cache
+  const profile = await getUserByUsernameOrEmail(cleanInput);
+
+  if (profile) {
+    if (profile.isLocked) {
+      throw new Error('This account has been suspended by the administrator.');
     }
-  }
 
-  // Clean out any fake seed users
-  users = users.filter((u) => u && !FAKE_UIDS.has(u.uid) && !u.uid.startsWith('seed_'));
-
-  const matchedUser = users.find(
-    (u) => u.email.toLowerCase() === cleanInput || u.username.toLowerCase() === cleanInput
-  );
-
-  if (matchedUser) {
     const creds = getCredentials();
-    const storedPass = creds[matchedUser.username.toLowerCase()] || creds[matchedUser.email.toLowerCase()];
-    if (storedPass && storedPass !== password) {
-      throw new Error('Incorrect password. Please check your password and try again.');
+    const storedPass = creds[profile.username.toLowerCase()] || creds[profile.email.toLowerCase()];
+
+    // 2a. If Firebase Auth is configured, attempt authentication with the user's email
+    if (isFirebaseConfigured && auth && profile.email) {
+      try {
+        await withTimeout(
+          signInWithEmailAndPassword(auth, profile.email, password),
+          4000
+        );
+        // Authentication succeeded with Firebase!
+        saveCredential(profile.username, password);
+        saveCredential(profile.email, password);
+        setUserOnlineStatus(profile.uid, true).catch(() => {});
+        profile.isOnline = true;
+        localStorage.setItem(CURRENT_USER_SESSION_KEY, JSON.stringify(profile));
+        return profile;
+      } catch (err: unknown) {
+        const fbErr = err as { code?: string; message?: string };
+        if (
+          fbErr?.code === 'auth/wrong-password' || 
+          fbErr?.code === 'auth/invalid-credential' ||
+          fbErr?.code === 'auth/invalid-password'
+        ) {
+          // Check if local credential matches before failing
+          if (storedPass && storedPass === password) {
+            saveCredential(profile.username, password);
+            saveCredential(profile.email, password);
+            setUserOnlineStatus(profile.uid, true).catch(() => {});
+            profile.isOnline = true;
+            localStorage.setItem(CURRENT_USER_SESSION_KEY, JSON.stringify(profile));
+            return profile;
+          }
+          throw new Error('Incorrect password. Please check your password and try again.');
+        }
+        // If Firebase Auth returned user-not-found (e.g. user was registered directly in Firestore)
+        if (storedPass && storedPass !== password) {
+          throw new Error('Incorrect password. Please check your password and try again.');
+        }
+      }
     }
 
-    setUserOnlineStatus(matchedUser.uid, true).catch(() => {});
-    matchedUser.isOnline = true;
-    localStorage.setItem(CURRENT_USER_SESSION_KEY, JSON.stringify(matchedUser));
-    return matchedUser;
+    // 2b. If local credential exists and password matches
+    if (storedPass) {
+      if (storedPass !== password) {
+        throw new Error('Incorrect password. Please check your password and try again.');
+      }
+      setUserOnlineStatus(profile.uid, true).catch(() => {});
+      profile.isOnline = true;
+      localStorage.setItem(CURRENT_USER_SESSION_KEY, JSON.stringify(profile));
+      return profile;
+    }
+
+    // 2c. User found in Firestore without local credential cache: save and sign in
+    saveCredential(profile.username, password);
+    if (profile.email) saveCredential(profile.email, password);
+    setUserOnlineStatus(profile.uid, true).catch(() => {});
+    profile.isOnline = true;
+    localStorage.setItem(CURRENT_USER_SESSION_KEY, JSON.stringify(profile));
+    return profile;
   }
 
-  // 2. If Firebase is active and user provided email, try Firebase with a short 1s timeout
+  // 3. Fallback if input was an email not yet in user index, try direct Firebase sign in
   if (isFirebaseConfigured && auth && cleanInput.includes('@')) {
     try {
       const userCredential = await withTimeout(
         signInWithEmailAndPassword(auth, cleanInput, password),
-        1000
+        4000
       );
-      let profile = await getUserProfile(userCredential.user.uid);
-      if (!profile) {
+      let newProfile = await getUserProfile(userCredential.user.uid);
+      if (!newProfile) {
         const autoUsername = cleanInput.split('@')[0].replace(/[^a-z0-9_]/g, '');
-        profile = {
+        newProfile = {
           uid: userCredential.user.uid,
           email: cleanInput,
           displayName: userCredential.user.displayName || autoUsername,
@@ -210,12 +257,17 @@ export const loginUser = async (params: LoginParams): Promise<UserProfile> => {
           createdAt: Date.now(),
           updatedAt: Date.now()
         };
-        await createUserProfile(profile);
+        await createUserProfile(newProfile);
       }
-      localStorage.setItem(CURRENT_USER_SESSION_KEY, JSON.stringify(profile));
-      return profile;
-    } catch {
-      // If Firebase sign-in failed/timed out, fall through to account not found
+      saveCredential(newProfile.username, password);
+      saveCredential(cleanInput, password);
+      localStorage.setItem(CURRENT_USER_SESSION_KEY, JSON.stringify(newProfile));
+      return newProfile;
+    } catch (err: unknown) {
+      const fbErr = err as { code?: string };
+      if (fbErr?.code === 'auth/wrong-password' || fbErr?.code === 'auth/invalid-credential') {
+        throw new Error('Incorrect password. Please check your password and try again.');
+      }
     }
   }
 

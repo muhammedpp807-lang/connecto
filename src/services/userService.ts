@@ -83,7 +83,7 @@ export const getUserProfile = async (uid: string): Promise<UserProfile | null> =
   if (isFirebaseConfigured && db) {
     try {
       const docRef = doc(db, 'users', uid);
-      const snap = await withTimeout(getDoc(docRef), 1500);
+      const snap = await withTimeout(getDoc(docRef), 2000);
       if (snap.exists()) {
         const data = snap.data() as UserProfile;
         // Keep local cache fresh
@@ -101,6 +101,69 @@ export const getUserProfile = async (uid: string): Promise<UserProfile | null> =
 
   const users = getLocalUsers();
   return users.find((u) => u.uid === uid) || null;
+};
+
+export const getUserByUsernameOrEmail = async (identifier: string): Promise<UserProfile | null> => {
+  const clean = identifier.toLowerCase().trim();
+  if (!clean) return null;
+
+  // 1. Check local storage
+  const localUsers = getLocalUsers();
+  const foundLocal = localUsers.find(
+    (u) => u.username.toLowerCase() === clean || u.email.toLowerCase() === clean
+  );
+  if (foundLocal) return foundLocal;
+
+  // 2. Check Firestore
+  if (isFirebaseConfigured && db) {
+    try {
+      // 2a. Check usernames index collection
+      const usernameDocRef = doc(db, 'usernames', clean);
+      const usernameSnap = await withTimeout(getDoc(usernameDocRef), 2000);
+      if (usernameSnap.exists()) {
+        const uid = usernameSnap.data()?.uid;
+        if (uid) {
+          const profile = await getUserProfile(uid);
+          if (profile) return profile;
+        }
+      }
+
+      // 2b. Query users collection by username
+      const usersRef = collection(db, 'users');
+      const usernameQuery = query(usersRef, where('username', '==', clean), limit(1));
+      const usernameSnapshots = await withTimeout(getDocs(usernameQuery), 2500);
+      if (!usernameSnapshots.empty) {
+        const profile = usernameSnapshots.docs[0].data() as UserProfile;
+        if (profile) {
+          const users = getLocalUsers();
+          if (!users.some((u) => u.uid === profile.uid)) {
+            users.push(profile);
+            saveLocalUsers(users);
+          }
+          return profile;
+        }
+      }
+
+      // 2c. Query users collection by email
+      const emailQuery = query(usersRef, where('email', '==', clean), limit(1));
+      const emailSnapshots = await withTimeout(getDocs(emailQuery), 2500);
+      if (!emailSnapshots.empty) {
+        const profile = emailSnapshots.docs[0].data() as UserProfile;
+        if (profile) {
+          const users = getLocalUsers();
+          if (!users.some((u) => u.uid === profile.uid)) {
+            users.push(profile);
+            saveLocalUsers(users);
+          }
+          return profile;
+        }
+      }
+    } catch (err) {
+      console.warn('Firestore getUserByUsernameOrEmail note:', err);
+    }
+  }
+
+  return null;
 };
 
 export const checkUsernameAvailable = async (username: string): Promise<boolean> => {

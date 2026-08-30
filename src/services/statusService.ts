@@ -98,6 +98,16 @@ function saveLocalStatuses(items: StatusItem[]): void {
   }
 }
 
+function sanitizeForFirestore(obj: Record<string, any>): Record<string, any> {
+  const result: Record<string, any> = {};
+  for (const [key, value] of Object.entries(obj)) {
+    if (value !== undefined) {
+      result[key] = value;
+    }
+  }
+  return result;
+}
+
 /**
  * Post a new Status (Video, Photo, or Text) with instant optimistic update
  */
@@ -130,9 +140,12 @@ export async function createStatus(
 
   // 2. Save to Firestore asynchronously without blocking local UI
   if (isFirebaseConfigured && db) {
-    setDoc(doc(db, 'statuses', id), newStatus).catch((err) => {
+    try {
+      const sanitized = sanitizeForFirestore(newStatus);
+      await setDoc(doc(db, 'statuses', id), sanitized);
+    } catch (err) {
       console.warn('Firestore createStatus note:', err);
-    });
+    }
   }
 
   return newStatus;

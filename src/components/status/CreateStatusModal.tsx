@@ -196,32 +196,32 @@ export const CreateStatusModal: React.FC<CreateStatusModalProps> = ({
     try {
       let finalMediaUrl = previewUrl;
 
-      // Start upload in background
       if (selectedFile) {
-        uploadMediaFile(
-          `statuses/${profile.uid}/${Date.now()}_${selectedFile.name}`,
-          selectedFile,
-          (pct) => setUploadProgress(pct)
-        ).then((uploadedUrl) => {
+        try {
+          const uploadedUrl = await uploadMediaFile(
+            `statuses/${profile.uid}/${Date.now()}_${selectedFile.name.replace(/\s+/g, '_')}`,
+            selectedFile,
+            (pct) => setUploadProgress(pct)
+          );
           if (uploadedUrl) {
-            // Update the status item in the background
+            finalMediaUrl = uploadedUrl;
           }
-        }).catch((err) => {
-          console.warn('Background upload note:', err);
-        });
+        } catch (uploadErr) {
+          console.warn('Direct upload fallback:', uploadErr);
+        }
       }
 
-      // Create optimistic status instantly (<10ms)
+      // Create status
       await createStatus({
         userId: profile.uid,
         userName: profile.displayName,
         userAvatar: profile.photoURL,
         userUsername: profile.username,
         type: mode,
-        mediaUrl: finalMediaUrl,
+        mediaUrl: finalMediaUrl || '',
         caption: mode === 'text' ? textContent.trim() : caption.trim(),
-        filter: filter,
-        textBackground: mode === 'text' ? TEXT_BACKGROUNDS[textBgIndex] : undefined,
+        filter: (filter || 'normal') as StatusFilter,
+        textBackground: mode === 'text' ? (TEXT_BACKGROUNDS[textBgIndex] || '') : undefined,
         duration: mode === 'video' ? Math.round(trimEnd - trimStart) : undefined,
         isMuted: isMuted,
         expiresAt,
