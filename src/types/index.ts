@@ -5,6 +5,11 @@ export interface UserProfile {
   username: string;
   photoURL?: string;
   about?: string;
+  website?: string;
+  location?: string;
+  statusMessage?: string;
+  coverURL?: string;
+  contacts?: string[];
   isOnline: boolean;
   lastSeen: number;
   role?: 'user' | 'admin';
@@ -114,6 +119,8 @@ export interface StatusItem {
   expiresAt: number; // 0 for never / permanent, or future timestamp ms
   expiryOption?: StatusExpiryOption;
 }
+
+export type UserStatus = StatusItem;
 
 export interface UserStatusGroup {
   userId: string;

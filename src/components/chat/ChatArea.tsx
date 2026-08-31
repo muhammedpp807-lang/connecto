@@ -214,25 +214,21 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   // Empty state: No chat selected
   if (!conversationId || (!recipient && !currentConversation) || !profile) {
     return (
-      <div className="flex-1 h-full hidden md:flex flex-col items-center justify-center p-8 bg-slate-50/50 dark:bg-[#0a0c12] text-center select-none">
-        <div className="max-w-md space-y-6 flex flex-col items-center">
-          <div className="p-4 rounded-3xl bg-white dark:bg-[#161b22] border border-slate-200 dark:border-[#1e2530] shadow-xl shadow-blue-500/5">
-            <Logo size="lg" showText={false} />
+      <div className="flex-1 h-full hidden md:flex flex-col items-center justify-center p-8 bg-[#0b141a] text-center select-none">
+        <div className="space-y-4 flex flex-col items-center max-w-sm">
+          {/* Centered Speech Bubble Icon with glowing gradient */}
+          <div className="w-16 h-16 rounded-3xl bg-gradient-to-tr from-purple-200 to-indigo-100 dark:from-[#3b2d54] dark:to-[#221c35] flex items-center justify-center shadow-lg shadow-purple-500/10">
+            <svg
+              className="w-8 h-8 text-purple-300 dark:text-purple-200 fill-current opacity-90"
+              viewBox="0 0 24 24"
+            >
+              <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z" />
+            </svg>
           </div>
 
-          <div className="space-y-2">
-            <h2 className="text-2xl font-black tracking-tight text-slate-900 dark:text-white">
-              Connecto Real-Time Messenger
-            </h2>
-            <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
-              Select a conversation, start a direct message, or create a group chat with your contacts. Fast media sharing with photo & video editor enabled.
-            </p>
-          </div>
-
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900/60 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
-            <ShieldCheck className="w-4 h-4 text-emerald-500" />
-            <span>Cloud & Firestore synchronized</span>
-          </div>
+          <p className="text-sm font-medium text-slate-400">
+            Select a conversation to start chatting
+          </p>
         </div>
       </div>
     );

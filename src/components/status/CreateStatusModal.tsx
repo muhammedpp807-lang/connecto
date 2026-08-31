@@ -242,45 +242,73 @@ export const CreateStatusModal: React.FC<CreateStatusModalProps> = ({
 
   return (
     <div 
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-3 sm:p-6 animate-in fade-in"
+      className="fixed inset-0 z-50 flex flex-col bg-black text-white overflow-hidden select-none animate-in fade-in"
       onClick={(e) => {
         if (e.target === e.currentTarget && !isSubmitting) onClose();
       }}
     >
-      <div className="bg-[#12161f] border border-[#1e2530] text-white rounded-3xl w-full max-w-xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden animate-in zoom-in-95">
-        
-        {/* Header */}
-        <div className="px-5 py-4 border-b border-[#1e2530] flex items-center justify-between bg-[#161b22]">
-          <div className="flex items-center gap-2">
-            <Sparkles className="w-5 h-5 text-emerald-400" />
-            <h3 className="font-bold text-sm text-white">Create New Status</h3>
+      {/* 1. Fullscreen Studio Top Header */}
+      <div className="px-4 sm:px-6 py-3.5 border-b border-white/10 flex items-center justify-between bg-black/80 backdrop-blur-md z-30">
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+            <Sparkles className="w-5 h-5" />
           </div>
+          <div>
+            <h3 className="font-bold text-sm sm:text-base text-white leading-tight">Create New Status</h3>
+            <p className="text-[11px] text-white/50 hidden sm:block">Upload photo, trim video or craft a colorful story</p>
+          </div>
+        </div>
+
+        {/* Top Right Actions */}
+        <div className="flex items-center gap-2.5">
+          <button
+            type="button"
+            onClick={handleSubmit}
+            disabled={isSubmitting}
+            className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs sm:text-sm font-bold shadow-lg shadow-emerald-900/40 flex items-center gap-2 transition cursor-pointer disabled:opacity-50 hover:scale-105 active:scale-95"
+          >
+            {isSubmitting ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>Posting...</span>
+              </>
+            ) : (
+              <>
+                <Send className="w-4 h-4" />
+                <span>Post Status</span>
+              </>
+            )}
+          </button>
+
           <button
             type="button"
             onClick={onClose}
-            className="p-1.5 rounded-full text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer"
+            disabled={isSubmitting}
+            className="p-2 sm:p-2.5 rounded-full bg-white/10 hover:bg-rose-600/90 text-white backdrop-blur-md border border-white/15 transition cursor-pointer"
             title="Close (Esc)"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
+      </div>
 
-        {/* Mode Selector Tabs */}
-        <div className="px-5 py-2.5 bg-[#0d1117] border-b border-[#1e2530] flex items-center gap-2">
+      {/* 2. Media Type Switcher Bar */}
+      <div className="px-4 sm:px-6 py-2.5 bg-black/60 border-b border-white/10 flex items-center justify-between gap-2 overflow-x-auto z-20 backdrop-blur-sm">
+        <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={() => {
               setMode('video');
               fileInputRef.current?.click();
             }}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer ${
+            className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition cursor-pointer ${
               mode === 'video'
-                ? 'bg-emerald-600 text-white shadow-md shadow-emerald-900/30'
-                : 'bg-[#161b22] text-slate-400 hover:text-white'
+                ? 'bg-emerald-600 text-white shadow-md shadow-emerald-900/40 ring-1 ring-emerald-400/50'
+                : 'bg-white/10 text-white/70 hover:text-white hover:bg-white/15'
             }`}
           >
             <Video className="w-4 h-4" />
-            Status Video
+            <span>Video Status</span>
           </button>
 
           <button
@@ -289,238 +317,250 @@ export const CreateStatusModal: React.FC<CreateStatusModalProps> = ({
               setMode('image');
               fileInputRef.current?.click();
             }}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer ${
+            className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition cursor-pointer ${
               mode === 'image'
-                ? 'bg-blue-600 text-white shadow-md shadow-blue-900/30'
-                : 'bg-[#161b22] text-slate-400 hover:text-white'
+                ? 'bg-blue-600 text-white shadow-md shadow-blue-900/40 ring-1 ring-blue-400/50'
+                : 'bg-white/10 text-white/70 hover:text-white hover:bg-white/15'
             }`}
           >
             <ImageIcon className="w-4 h-4" />
-            Photo
+            <span>Photo Status</span>
           </button>
 
           <button
             type="button"
             onClick={() => setMode('text')}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer ${
+            className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition cursor-pointer ${
               mode === 'text'
-                ? 'bg-purple-600 text-white shadow-md shadow-purple-900/30'
-                : 'bg-[#161b22] text-slate-400 hover:text-white'
+                ? 'bg-purple-600 text-white shadow-md shadow-purple-900/40 ring-1 ring-purple-400/50'
+                : 'bg-white/10 text-white/70 hover:text-white hover:bg-white/15'
             }`}
           >
             <Type className="w-4 h-4" />
-            Text Story
+            <span>Text Story</span>
           </button>
-
-          <input
-            type="file"
-            ref={fileInputRef}
-            onChange={handleFileSelect}
-            accept="video/*,image/*"
-            className="hidden"
-          />
         </div>
 
-        {/* Body / Preview Area */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
-          {/* 1. Video / Image Preview Screen */}
-          {(mode === 'video' || mode === 'image') && (
-            <div className="space-y-3">
-              <div className="relative w-full aspect-[9/14] sm:aspect-[9/12] max-h-[350px] bg-black rounded-2xl overflow-hidden flex items-center justify-center border border-[#1e2530] shadow-inner group">
-                {previewUrl ? (
-                  mode === 'video' ? (
-                    <>
-                      <video
-                        ref={videoRef}
-                        src={previewUrl}
-                        playsInline
-                        muted={isMuted}
-                        onLoadedMetadata={handleLoadedMetadata}
-                        onTimeUpdate={handleTimeUpdate}
-                        className={`w-full h-full object-contain ${activeFilterClass}`}
-                      />
-                      {/* Floating Play/Pause Center Button */}
-                      <button
-                        type="button"
-                        onClick={togglePlay}
-                        className="absolute inset-0 m-auto w-14 h-14 rounded-full bg-black/60 hover:bg-black/80 backdrop-blur-sm text-white flex items-center justify-center transition transform group-hover:scale-105 cursor-pointer"
-                      >
-                        {isPlaying ? <Pause className="w-6 h-6" /> : <Play className="w-6 h-6 ml-0.5" />}
-                      </button>
+        {previewUrl && (
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className="text-xs text-emerald-400 hover:text-emerald-300 font-semibold px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 transition shrink-0"
+          >
+            Change File
+          </button>
+        )}
 
-                      {/* Floating Audio Mute Toggle */}
-                      <button
-                        type="button"
-                        onClick={() => setIsMuted(!isMuted)}
-                        className="absolute top-3 right-3 p-2 rounded-full bg-black/60 hover:bg-black/80 text-white backdrop-blur-sm transition cursor-pointer"
-                        title={isMuted ? 'Unmute Audio' : 'Mute Audio'}
-                      >
-                        {isMuted ? <VolumeX className="w-4 h-4 text-rose-400" /> : <Volume2 className="w-4 h-4 text-emerald-400" />}
-                      </button>
-                    </>
-                  ) : (
+        <input
+          type="file"
+          ref={fileInputRef}
+          onChange={handleFileSelect}
+          accept="video/*,image/*"
+          className="hidden"
+        />
+      </div>
+
+      {/* 3. Fullscreen Workspace Canvas & Editing Controls */}
+      <div className="flex-1 w-full h-full flex flex-col md:flex-row overflow-hidden relative">
+        
+        {/* Left/Center: Huge Fullscreen Media Stage */}
+        <div className="flex-1 w-full h-full relative flex items-center justify-center bg-black/90 p-2 sm:p-6 overflow-hidden">
+          
+          {/* Ambient blurred backdrop for current preview */}
+          {previewUrl && mode === 'image' && (
+            <div 
+              className="absolute inset-0 bg-cover bg-center blur-3xl opacity-25 scale-110 pointer-events-none"
+              style={{ backgroundImage: `url(${previewUrl})` }}
+            />
+          )}
+
+          {/* Media Player / Canvas Container */}
+          {(mode === 'video' || mode === 'image') && (
+            <div className="relative w-full h-full max-h-[78vh] flex items-center justify-center rounded-2xl overflow-hidden group">
+              {previewUrl ? (
+                mode === 'video' ? (
+                  <div className="relative w-full h-full flex items-center justify-center">
+                    <video
+                      ref={videoRef}
+                      src={previewUrl}
+                      playsInline
+                      muted={isMuted}
+                      onLoadedMetadata={handleLoadedMetadata}
+                      onTimeUpdate={handleTimeUpdate}
+                      className={`max-w-full max-h-full w-auto h-auto object-contain rounded-2xl shadow-2xl transition-all duration-200 ${activeFilterClass}`}
+                    />
+
+                    {/* Floating Center Play Button */}
+                    <button
+                      type="button"
+                      onClick={togglePlay}
+                      className="absolute inset-0 m-auto w-16 h-16 rounded-full bg-black/60 hover:bg-black/80 backdrop-blur-md text-white flex items-center justify-center transition transform group-hover:scale-110 cursor-pointer shadow-2xl border border-white/20"
+                    >
+                      {isPlaying ? <Pause className="w-7 h-7" /> : <Play className="w-7 h-7 ml-1" />}
+                    </button>
+
+                    {/* Floating Sound Toggle */}
+                    <button
+                      type="button"
+                      onClick={() => setIsMuted(!isMuted)}
+                      className="absolute top-4 right-4 p-3 rounded-full bg-black/70 hover:bg-black/90 text-white backdrop-blur-md transition cursor-pointer border border-white/15 shadow-lg"
+                      title={isMuted ? 'Unmute' : 'Mute'}
+                    >
+                      {isMuted ? <VolumeX className="w-5 h-5 text-rose-400" /> : <Volume2 className="w-5 h-5 text-emerald-400" />}
+                    </button>
+                  </div>
+                ) : (
+                  <div className="relative w-full h-full flex items-center justify-center">
                     <img
                       src={previewUrl}
                       alt="Status Preview"
-                      className={`w-full h-full object-contain ${activeFilterClass}`}
+                      className={`max-w-full max-h-full w-auto h-auto object-contain rounded-2xl shadow-2xl ${activeFilterClass}`}
                     />
-                  )
-                ) : (
-                  <div className="flex flex-col items-center justify-center p-6 text-center space-y-3">
-                    <div className="p-4 rounded-full bg-[#161b22] border border-[#1e2530] text-emerald-400">
-                      {mode === 'video' ? <Video className="w-8 h-8" /> : <ImageIcon className="w-8 h-8" />}
-                    </div>
-                    <p className="text-xs font-semibold text-slate-300">
-                      {mode === 'video' ? 'Upload video file up to 100MB' : 'Upload high-resolution photo'}
+                  </div>
+                )
+              ) : (
+                <div 
+                  onClick={() => fileInputRef.current?.click()}
+                  className="flex flex-col items-center justify-center p-8 sm:p-12 text-center space-y-4 max-w-md w-full border-2 border-dashed border-white/20 rounded-3xl bg-white/5 hover:bg-white/10 hover:border-emerald-500/50 transition cursor-pointer backdrop-blur-md"
+                >
+                  <div className="p-5 rounded-2xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                    {mode === 'video' ? <Video className="w-10 h-10" /> : <ImageIcon className="w-10 h-10" />}
+                  </div>
+                  <div>
+                    <p className="text-base sm:text-lg font-bold text-white">
+                      {mode === 'video' ? 'Select Video File' : 'Select Photo'}
                     </p>
-                    <button
-                      type="button"
-                      onClick={() => fileInputRef.current?.click()}
-                      className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-md cursor-pointer"
-                    >
-                      Choose Media File
-                    </button>
+                    <p className="text-xs text-white/60 mt-1">
+                      {mode === 'video' ? 'Upload video up to 100MB (Supports 30s trimming)' : 'Upload high-resolution photo'}
+                    </p>
                   </div>
-                )}
-              </div>
-
-              {/* Video Timeline / Trimmer Controls */}
-              {mode === 'video' && previewUrl && videoDuration > 0 && (
-                <div className="p-3 bg-[#161b22] rounded-2xl border border-[#1e2530] space-y-2">
-                  <div className="flex items-center justify-between text-xs text-slate-300 font-semibold">
-                    <span className="flex items-center gap-1.5">
-                      <Scissors className="w-3.5 h-3.5 text-emerald-400" />
-                      Trim Video Clip (Max 30s)
-                    </span>
-                    <span className="text-emerald-400 font-mono">
-                      {currentTime.toFixed(1)}s / {videoDuration.toFixed(1)}s
-                    </span>
-                  </div>
-
-                  <input
-                    type="range"
-                    min={trimStart}
-                    max={trimEnd}
-                    step={0.1}
-                    value={currentTime}
-                    onChange={(e) => handleTrimSeek(Number(e.target.value))}
-                    className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-emerald-500"
-                  />
-
-                  <div className="flex items-center justify-between gap-3 text-[11px] text-slate-400">
-                    <div>
-                      <span>Start: </span>
-                      <input
-                        type="number"
-                        min={0}
-                        max={Math.max(0, trimEnd - 1)}
-                        value={trimStart}
-                        onChange={(e) => {
-                          const val = Math.max(0, Number(e.target.value));
-                          setTrimStart(val);
-                          handleTrimSeek(val);
-                        }}
-                        className="w-14 px-1.5 py-0.5 rounded bg-[#0d1117] border border-[#1e2530] text-white text-center text-xs ml-1"
-                      />
-                      s
-                    </div>
-                    <div>
-                      <span>End: </span>
-                      <input
-                        type="number"
-                        min={trimStart + 1}
-                        max={videoDuration}
-                        value={Math.round(trimEnd)}
-                        onChange={(e) => {
-                          const val = Math.min(videoDuration, Number(e.target.value));
-                          setTrimEnd(val);
-                        }}
-                        className="w-14 px-1.5 py-0.5 rounded bg-[#0d1117] border border-[#1e2530] text-white text-center text-xs ml-1"
-                      />
-                      s
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Visual Filters Bar */}
-              {previewUrl && (
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-400 flex items-center gap-1.5">
-                    <Sliders className="w-3.5 h-3.5 text-purple-400" />
-                    Visual Filters
-                  </label>
-                  <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
-                    {FILTERS.map((f) => (
-                      <button
-                        key={f.id}
-                        type="button"
-                        onClick={() => setFilter(f.id)}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex-shrink-0 cursor-pointer ${
-                          filter === f.id
-                            ? 'bg-purple-600 text-white shadow-md ring-2 ring-purple-500/40'
-                            : 'bg-[#161b22] text-slate-400 hover:text-white border border-[#1e2530]'
-                        }`}
-                      >
-                        {f.name}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Caption Input */}
-              {previewUrl && (
-                <div className="space-y-1.5">
-                  <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
-                    {QUICK_EMOJIS.map((em) => (
-                      <button
-                        key={em}
-                        type="button"
-                        onClick={() => setCaption((prev) => prev + em)}
-                        className="p-1 rounded-lg hover:bg-[#161b22] text-sm transition cursor-pointer"
-                      >
-                        {em}
-                      </button>
-                    ))}
-                  </div>
-                  <input
-                    type="text"
-                    value={caption}
-                    onChange={(e) => setCaption(e.target.value)}
-                    placeholder="Add a caption to your status..."
-                    className="w-full px-4 py-2.5 rounded-xl bg-[#161b22] border border-[#1e2530] text-xs text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
-                  />
+                  <button
+                    type="button"
+                    className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-lg shadow-emerald-900/40 pointer-events-none"
+                  >
+                    Browse Files
+                  </button>
                 </div>
               )}
             </div>
           )}
 
-          {/* 2. Text Status Mode */}
+          {/* Text Story Fullscreen Editor */}
           {mode === 'text' && (
-            <div className="space-y-4">
-              {/* Text Canvas */}
-              <div className={`w-full aspect-[9/13] max-h-[340px] rounded-2xl p-6 flex flex-col items-center justify-center text-center shadow-xl ${TEXT_BACKGROUNDS[textBgIndex]} transition-all duration-300 relative`}>
-                <textarea
-                  value={textContent}
-                  onChange={(e) => setTextContent(e.target.value)}
-                  placeholder="Type your status story here..."
-                  maxLength={300}
-                  className="w-full bg-transparent text-white font-bold text-lg sm:text-xl placeholder:text-white/60 text-center resize-none focus:outline-none leading-relaxed"
-                  rows={5}
-                />
-                <span className="absolute bottom-3 right-4 text-[10px] text-white/60 font-mono">
-                  {textContent.length}/300
-                </span>
+            <div className={`w-full h-full max-h-[78vh] rounded-3xl p-8 sm:p-16 flex flex-col items-center justify-center text-center shadow-2xl ${TEXT_BACKGROUNDS[textBgIndex]} transition-all duration-300 relative border border-white/15`}>
+              <textarea
+                value={textContent}
+                onChange={(e) => setTextContent(e.target.value)}
+                placeholder="Type your status story here..."
+                maxLength={300}
+                className="w-full max-w-2xl bg-transparent text-white font-bold text-2xl sm:text-4xl md:text-5xl placeholder:text-white/50 text-center resize-none focus:outline-none leading-relaxed drop-shadow-md"
+                rows={5}
+                autoFocus
+              />
+              <div className="absolute bottom-5 right-6 text-xs text-white/70 font-mono bg-black/30 px-3 py-1 rounded-full backdrop-blur-xs">
+                {textContent.length}/300
               </div>
+            </div>
+          )}
+        </div>
 
-              {/* Color Palette Switcher */}
-              <div className="flex items-center justify-between bg-[#161b22] p-3 rounded-2xl border border-[#1e2530]">
-                <span className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
-                  <Palette className="w-4 h-4 text-purple-400" />
-                  Background Theme
-                </span>
-                <div className="flex items-center gap-2">
+        {/* Right Sidebar: Timeline trimmer, Filters, Expiry & Caption Controls */}
+        <div className="w-full md:w-96 bg-[#0e1218] border-t md:border-t-0 md:border-l border-white/10 p-4 sm:p-5 flex flex-col justify-between overflow-y-auto space-y-4 max-h-[40vh] md:max-h-full">
+          
+          <div className="space-y-4">
+            {/* Video Timeline Trimmer */}
+            {mode === 'video' && previewUrl && videoDuration > 0 && (
+              <div className="p-3.5 bg-white/5 rounded-2xl border border-white/10 space-y-2.5">
+                <div className="flex items-center justify-between text-xs text-white/90 font-semibold">
+                  <span className="flex items-center gap-1.5 text-emerald-400">
+                    <Scissors className="w-4 h-4" />
+                    Trim Video (Max 30s)
+                  </span>
+                  <span className="font-mono text-emerald-300">
+                    {currentTime.toFixed(1)}s / {videoDuration.toFixed(1)}s
+                  </span>
+                </div>
+
+                <input
+                  type="range"
+                  min={trimStart}
+                  max={trimEnd}
+                  step={0.1}
+                  value={currentTime}
+                  onChange={(e) => handleTrimSeek(Number(e.target.value))}
+                  className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-emerald-500"
+                />
+
+                <div className="flex items-center justify-between gap-3 text-xs text-white/70">
+                  <div className="flex items-center">
+                    <span>Start:</span>
+                    <input
+                      type="number"
+                      min={0}
+                      max={Math.max(0, trimEnd - 1)}
+                      value={trimStart}
+                      onChange={(e) => {
+                        const val = Math.max(0, Number(e.target.value));
+                        setTrimStart(val);
+                        handleTrimSeek(val);
+                      }}
+                      className="w-14 px-2 py-1 rounded-lg bg-black/60 border border-white/15 text-white text-center text-xs ml-1.5"
+                    />
+                    s
+                  </div>
+                  <div className="flex items-center">
+                    <span>End:</span>
+                    <input
+                      type="number"
+                      min={trimStart + 1}
+                      max={videoDuration}
+                      value={Math.round(trimEnd)}
+                      onChange={(e) => {
+                        const val = Math.min(videoDuration, Number(e.target.value));
+                        setTrimEnd(val);
+                      }}
+                      className="w-14 px-2 py-1 rounded-lg bg-black/60 border border-white/15 text-white text-center text-xs ml-1.5"
+                    />
+                    s
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Visual Filters Bar */}
+            {previewUrl && (mode === 'video' || mode === 'image') && (
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-white/80 flex items-center gap-1.5">
+                  <Sliders className="w-3.5 h-3.5 text-purple-400" />
+                  Visual Filters
+                </label>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {FILTERS.map((f) => (
+                    <button
+                      key={f.id}
+                      type="button"
+                      onClick={() => setFilter(f.id)}
+                      className={`px-2.5 py-2 rounded-xl text-xs font-bold transition cursor-pointer text-center ${
+                        filter === f.id
+                          ? 'bg-purple-600 text-white ring-2 ring-purple-400/50 shadow-md'
+                          : 'bg-white/5 text-white/70 hover:text-white border border-white/10'
+                      }`}
+                    >
+                      {f.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Background Theme Switcher for Text */}
+            {mode === 'text' && (
+              <div className="p-3.5 bg-white/5 rounded-2xl border border-white/10 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-white/90 flex items-center gap-1.5">
+                    <Palette className="w-4 h-4 text-purple-400" />
+                    Gradient Background
+                  </span>
                   <button
                     type="button"
                     onClick={() => setTextBgIndex((prev) => (prev + 1) % TEXT_BACKGROUNDS.length)}
@@ -531,86 +571,97 @@ export const CreateStatusModal: React.FC<CreateStatusModalProps> = ({
                   </button>
                 </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {/* 3. Expiring Time Selection (Never or Specified Time) */}
-          <div className="p-3.5 bg-[#161b22] rounded-2xl border border-[#1e2530] space-y-2.5">
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
-                <Clock className="w-3.5 h-3.5 text-emerald-400" />
-                Status Expiration Time
-              </label>
-              <span className="text-[11px] font-semibold text-emerald-400">
-                {EXPIRY_OPTIONS.find((o) => o.id === expiryOption)?.label}
-              </span>
-            </div>
-
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
-              {EXPIRY_OPTIONS.map((opt) => {
-                const isSelected = expiryOption === opt.id;
-                return (
-                  <button
-                    key={opt.id}
-                    type="button"
-                    onClick={() => setExpiryOption(opt.id)}
-                    className={`px-2.5 py-2 rounded-xl text-xs font-semibold flex items-center justify-between transition cursor-pointer ${
-                      isSelected
-                        ? opt.isPermanent
-                          ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white ring-2 ring-purple-400/50 shadow-md'
-                          : 'bg-emerald-600 text-white ring-2 ring-emerald-400/50 shadow-md'
-                        : 'bg-[#0d1117] text-slate-400 hover:text-white border border-[#1e2530]'
-                    }`}
-                  >
-                    <span className="flex items-center gap-1.5 truncate">
-                      {opt.isPermanent && <InfinityIcon className="w-3 h-3 text-amber-300 flex-shrink-0" />}
-                      {opt.label}
-                    </span>
-                    {isSelected && <Check className="w-3 h-3 text-white flex-shrink-0 ml-1" />}
-                  </button>
-                );
-              })}
-            </div>
-            
-            <p className="text-[11px] text-slate-400">
-              {EXPIRY_OPTIONS.find((o) => o.id === expiryOption)?.description}
-            </p>
-          </div>
-
-          {/* Upload Progress Bar */}
-          {isSubmitting && (
-            <div className="p-3 bg-[#161b22] rounded-xl border border-[#1e2530] space-y-2">
-              <div className="flex items-center justify-between text-xs text-emerald-400 font-bold">
-                <span>Publishing status instantly...</span>
-                <span>{uploadProgress}%</span>
-              </div>
-              <div className="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
-                <div
-                  className="bg-emerald-500 h-full rounded-full transition-all duration-300"
-                  style={{ width: `${Math.max(20, uploadProgress)}%` }}
+            {/* Caption Input for Image/Video */}
+            {previewUrl && (mode === 'video' || mode === 'image') && (
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-white/80">Caption</label>
+                <div className="flex items-center gap-1 overflow-x-auto pb-1">
+                  {QUICK_EMOJIS.map((em) => (
+                    <button
+                      key={em}
+                      type="button"
+                      onClick={() => setCaption((prev) => prev + em)}
+                      className="p-1 rounded-lg hover:bg-white/10 text-base transition cursor-pointer"
+                    >
+                      {em}
+                    </button>
+                  ))}
+                </div>
+                <input
+                  type="text"
+                  value={caption}
+                  onChange={(e) => setCaption(e.target.value)}
+                  placeholder="Add a caption to your status..."
+                  className="w-full px-4 py-2.5 rounded-xl bg-black/60 border border-white/15 text-xs sm:text-sm text-white placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
                 />
               </div>
-            </div>
-          )}
-        </div>
-
-        {/* Footer Actions */}
-        <div className="px-5 py-3.5 border-t border-[#1e2530] bg-[#161b22] flex items-center justify-between">
-          <p className="text-[11px] text-slate-400 flex items-center gap-1">
-            {expiryOption === 'never' ? (
-              <span className="text-purple-400 font-medium flex items-center gap-1">
-                <InfinityIcon className="w-3 h-3" /> Permanent (Never expires)
-              </span>
-            ) : (
-              <span>Expires after {EXPIRY_OPTIONS.find(o => o.id === expiryOption)?.label}</span>
             )}
-          </p>
-          <div className="flex items-center gap-2">
+
+            {/* Status Expiration Time Selection */}
+            <div className="p-3.5 bg-white/5 rounded-2xl border border-white/10 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-white/90 flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5 text-emerald-400" />
+                  Expiration Time
+                </label>
+                <span className="text-[11px] font-semibold text-emerald-400">
+                  {EXPIRY_OPTIONS.find((o) => o.id === expiryOption)?.label}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-1.5">
+                {EXPIRY_OPTIONS.map((opt) => {
+                  const isSelected = expiryOption === opt.id;
+                  return (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => setExpiryOption(opt.id)}
+                      className={`px-2.5 py-2 rounded-xl text-xs font-semibold flex items-center justify-between transition cursor-pointer ${
+                        isSelected
+                          ? opt.isPermanent
+                            ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white ring-2 ring-purple-400/50 shadow-md'
+                            : 'bg-emerald-600 text-white ring-2 ring-emerald-400/50 shadow-md'
+                          : 'bg-black/40 text-white/70 hover:text-white border border-white/10'
+                      }`}
+                    >
+                      <span className="flex items-center gap-1 truncate">
+                        {opt.isPermanent && <InfinityIcon className="w-3 h-3 text-amber-300 shrink-0" />}
+                        {opt.label}
+                      </span>
+                      {isSelected && <Check className="w-3 h-3 text-white shrink-0 ml-1" />}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Upload Progress */}
+            {isSubmitting && (
+              <div className="p-3.5 bg-white/5 rounded-2xl border border-white/10 space-y-2">
+                <div className="flex items-center justify-between text-xs text-emerald-400 font-bold">
+                  <span>Publishing status...</span>
+                  <span>{uploadProgress}%</span>
+                </div>
+                <div className="w-full bg-black/60 rounded-full h-2 overflow-hidden">
+                  <div
+                    className="bg-emerald-500 h-full rounded-full transition-all duration-300"
+                    style={{ width: `${Math.max(20, uploadProgress)}%` }}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Post Action Button */}
+          <div className="pt-3 border-t border-white/10 flex items-center justify-between gap-2">
             <button
               type="button"
               onClick={onClose}
               disabled={isSubmitting}
-              className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white hover:bg-[#0d1117] transition cursor-pointer"
+              className="px-4 py-2.5 rounded-xl text-xs font-semibold text-white/60 hover:text-white hover:bg-white/10 transition cursor-pointer"
             >
               Cancel
             </button>
@@ -618,21 +669,22 @@ export const CreateStatusModal: React.FC<CreateStatusModalProps> = ({
               type="button"
               onClick={handleSubmit}
               disabled={isSubmitting}
-              className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-md shadow-emerald-900/30 flex items-center gap-2 transition cursor-pointer disabled:opacity-50"
+              className="flex-1 px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs sm:text-sm font-bold shadow-lg shadow-emerald-900/40 flex items-center justify-center gap-2 transition cursor-pointer disabled:opacity-50 hover:scale-102 active:scale-98"
             >
               {isSubmitting ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  Posting...
+                  <span>Posting...</span>
                 </>
               ) : (
                 <>
                   <Send className="w-4 h-4" />
-                  Post Status
+                  <span>Post Status</span>
                 </>
               )}
             </button>
           </div>
+
         </div>
 
       </div>

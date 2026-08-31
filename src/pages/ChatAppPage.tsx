@@ -1,16 +1,59 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { NavRail, AppNavTab } from '../components/navigation/NavRail';
 import { Sidebar } from '../components/chat/Sidebar';
 import { ChatArea } from '../components/chat/ChatArea';
+import { StatusPageView } from '../components/status/StatusPageView';
+import { SettingsPageView } from '../components/settings/SettingsPageView';
+import { ProfilePageView } from '../components/profile/ProfilePageView';
+import { ContactsPageView } from '../components/contacts/ContactsPageView';
+import { HelpModal } from '../components/common/HelpModal';
 import { UserProfile, Conversation } from '../types';
 import { SEO } from '../components/common/SEO';
 import { useTheme } from '../contexts/ThemeContext';
+import { useAuth } from '../contexts/AuthContext';
+import { subscribeToConversations } from '../services/chatService';
+import { subscribeToStatuses } from '../services/statusService';
 
 export const ChatAppPage: React.FC = () => {
+  const { profile } = useAuth();
   const { appBackground, customAppWallpaper } = useTheme();
+
+  const [activeTab, setActiveTab] = useState<AppNavTab>('chats');
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
   const [selectedRecipient, setSelectedRecipient] = useState<UserProfile | null>(null);
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
   const [mobileView, setMobileView] = useState<'sidebar' | 'chat'>('sidebar');
+  const [showHelpModal, setShowHelpModal] = useState(false);
+
+  // Real-time unread badges & status counts
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [activeStatusesCount, setActiveStatusesCount] = useState(0);
+
+  useEffect(() => {
+    if (!profile) return;
+
+    const unsubConvs = subscribeToConversations(profile.uid, (convs) => {
+      let total = 0;
+      convs.forEach((c) => {
+        const u = c.unreadCount?.[profile.uid] || 0;
+        total += u;
+      });
+      setUnreadCount(total);
+    });
+
+    const unsubStatus = subscribeToStatuses(profile.uid, (groups) => {
+      let count = 0;
+      groups.forEach((g) => {
+        count += g.statuses.length;
+      });
+      setActiveStatusesCount(count);
+    });
+
+    return () => {
+      unsubConvs();
+      unsubStatus();
+    };
+  }, [profile]);
 
   const handleSelectConversation = (
     conversationId: string, 
@@ -21,6 +64,15 @@ export const ChatAppPage: React.FC = () => {
     setSelectedRecipient(recipient || null);
     setSelectedConversation(conversation || null);
     setMobileView('chat');
+    setActiveTab('chats');
+  };
+
+  const handleStartChatFromContacts = (conversationId: string, recipient: UserProfile) => {
+    setSelectedConversationId(conversationId);
+    setSelectedRecipient(recipient);
+    setSelectedConversation(null);
+    setMobileView('chat');
+    setActiveTab('chats');
   };
 
   const handleBackMobile = () => {
@@ -34,11 +86,19 @@ export const ChatAppPage: React.FC = () => {
     setMobileView('sidebar');
   };
 
-  const titleHeader = selectedConversation?.isGroup
-    ? `${selectedConversation.groupName} – Connecto Group`
+  const titleHeader = activeTab === 'status'
+    ? 'Pulse – Status Updates'
+    : activeTab === 'settings'
+    ? 'Pulse – Settings & Preferences'
+    : activeTab === 'profile'
+    ? 'Pulse – User Profile'
+    : activeTab === 'contacts'
+    ? 'Pulse – Contacts & Directory'
+    : selectedConversation?.isGroup
+    ? `${selectedConversation.groupName} – Pulse Group`
     : selectedRecipient
-    ? `${selectedRecipient.displayName} – Connecto Chat`
-    : 'Connecto – Real-Time Messaging & Groups';
+    ? `${selectedRecipient.displayName} – Pulse Chat`
+    : 'Pulse – Real-Time Messaging & Status';
 
   return (
     <div
@@ -51,58 +111,76 @@ export const ChatAppPage: React.FC = () => {
             }
           : undefined
       }
-      className={`h-screen w-screen flex overflow-hidden transition-colors ${
-        customAppWallpaper
-          ? ''
-          : appBackground === 'slate'
-          ? 'bg-slate-200 dark:bg-[#161b22]'
-          : appBackground === 'deep_dark'
-          ? 'bg-[#06080d]'
-          : appBackground === 'warm_soft'
-          ? 'bg-[#f7f5f0] dark:bg-[#181614]'
-          : appBackground === 'aurora'
-          ? 'bg-gradient-to-br from-slate-900 via-purple-950 to-slate-900 text-white'
-          : appBackground === 'oled_black'
-          ? 'bg-black text-white'
-          : appBackground === 'nebula_glow'
-          ? 'bg-gradient-to-br from-[#0c0d21] via-[#1a0f2e] to-[#0a1128] text-white'
-          : appBackground === 'forest_mist'
-          ? 'bg-gradient-to-br from-[#071d18] via-[#0d2818] to-[#04151f] text-white'
-          : appBackground === 'cyber_grid'
-          ? 'bg-[#050b14] bg-[linear-gradient(to_right,#0c2340_1px,transparent_1px),linear-gradient(to_bottom,#0c2340_1px,transparent_1px)] bg-[size:2.5rem_2.5rem] text-white'
-          : appBackground === 'sunset_dream'
-          ? 'bg-gradient-to-br from-[#2a0845] via-[#6441a5] to-[#fe8c00] text-white'
-          : 'bg-slate-100 dark:bg-[#0a0c12]'
-      }`}
+      className={`h-screen w-screen flex overflow-hidden bg-[#efeae2] dark:bg-[#0b141a] text-slate-900 dark:text-slate-100 transition-colors`}
     >
       <SEO title={titleHeader} />
 
-      {/* Sidebar Container */}
-      <div
-        className={`w-full md:w-80 lg:w-96 h-full flex-shrink-0 transition-all duration-300 ${
-          mobileView === 'chat' ? 'hidden md:flex' : 'flex'
-        }`}
-      >
-        <Sidebar
-          onSelectConversation={handleSelectConversation}
-          selectedId={selectedConversationId}
-        />
+      {/* 1. Leftmost Vertical Nav Rail (Pulse) */}
+      <NavRail
+        activeTab={activeTab}
+        onTabChange={(tab) => {
+          setActiveTab(tab);
+          if (tab === 'chats') {
+            setMobileView('sidebar');
+          }
+        }}
+        unreadChatsCount={unreadCount}
+        activeStatusCount={activeStatusesCount}
+        onOpenHelp={() => setShowHelpModal(true)}
+      />
+
+      {/* 2. Main Content Area depending on Active Tab */}
+      <div className="flex-1 h-full flex overflow-hidden">
+        {/* Tab A: Chats (Left Sidebar list + Right Conversation area) */}
+        {activeTab === 'chats' && (
+          <div className="w-full h-full flex overflow-hidden">
+            {/* Chats List Sidebar */}
+            <div
+              className={`w-full md:w-80 lg:w-[380px] h-full flex-shrink-0 transition-all duration-300 ${
+                mobileView === 'chat' ? 'hidden md:flex' : 'flex'
+              }`}
+            >
+              <Sidebar
+                onSelectConversation={handleSelectConversation}
+                selectedId={selectedConversationId}
+              />
+            </div>
+
+            {/* Active Conversation / Empty state */}
+            <div
+              className={`flex-1 h-full transition-all duration-300 ${
+                mobileView === 'sidebar' ? 'hidden md:flex' : 'flex'
+              }`}
+            >
+              <ChatArea
+                conversationId={selectedConversationId}
+                recipient={selectedRecipient}
+                conversation={selectedConversation}
+                onBackMobile={handleBackMobile}
+                onLeaveGroup={handleLeaveGroup}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Tab B: Status Screen (WhatsApp Style) */}
+        {activeTab === 'status' && <StatusPageView />}
+
+        {/* Tab C: Contacts Screen */}
+        {activeTab === 'contacts' && (
+          <ContactsPageView onStartChat={handleStartChatFromContacts} />
+        )}
+
+        {/* Tab D: Settings Screen */}
+        {activeTab === 'settings' && <SettingsPageView />}
+
+        {/* Tab E: Profile Screen */}
+        {activeTab === 'profile' && <ProfilePageView />}
       </div>
 
-      {/* Chat Area Container */}
-      <div
-        className={`flex-1 h-full transition-all duration-300 ${
-          mobileView === 'sidebar' ? 'hidden md:flex' : 'flex'
-        }`}
-      >
-        <ChatArea
-          conversationId={selectedConversationId}
-          recipient={selectedRecipient}
-          conversation={selectedConversation}
-          onBackMobile={handleBackMobile}
-          onLeaveGroup={handleLeaveGroup}
-        />
-      </div>
+      {/* Help Modal */}
+      {showHelpModal && <HelpModal onClose={() => setShowHelpModal(false)} />}
     </div>
   );
 };
+

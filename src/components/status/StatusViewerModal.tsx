@@ -298,9 +298,9 @@ export const StatusViewerModal: React.FC<StatusViewerModalProps> = ({
         </button>
       ) : null}
 
-      {/* 3. Main Story Fullscreen Container */}
+      {/* 3. Main Story Fullscreen Container (True edge-to-edge) */}
       <div 
-        className="relative w-full h-full max-w-2xl sm:max-w-3xl md:max-w-4xl mx-auto flex flex-col justify-between z-20 shadow-2xl"
+        className="relative w-full h-full max-w-none mx-auto flex flex-col justify-between z-20"
         onMouseDown={() => setIsPaused(true)}
         onMouseUp={() => setIsPaused(false)}
         onTouchStart={() => setIsPaused(true)}

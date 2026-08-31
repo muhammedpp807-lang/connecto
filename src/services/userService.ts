@@ -438,3 +438,19 @@ export const deleteAllUsers = async (): Promise<void> => {
   userChannel?.postMessage({ type: 'ALL_DATA_CLEARED' });
 };
 
+export const addContact = async (userId: string, contactId: string): Promise<void> => {
+  const profile = await getUserProfile(userId);
+  if (!profile) return;
+  const contacts = new Set(profile.contacts || []);
+  contacts.add(contactId);
+  await updateUserProfile(userId, { contacts: Array.from(contacts) });
+};
+
+export const removeContact = async (userId: string, contactId: string): Promise<void> => {
+  const profile = await getUserProfile(userId);
+  if (!profile) return;
+  const contacts = (profile.contacts || []).filter((id) => id !== contactId);
+  await updateUserProfile(userId, { contacts });
+};
+
+

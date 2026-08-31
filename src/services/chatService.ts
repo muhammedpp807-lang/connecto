@@ -935,6 +935,46 @@ export const deleteConversation = async (conversationId: string): Promise<void> 
   chatChannel?.postMessage({ type: 'MESSAGES_UPDATED', convId: conversationId });
 };
 
+export const getOrCreateConversation = async (
+  userId1: string,
+  userId2: string
+): Promise<Conversation> => {
+  const convs = getLocalConversations();
+  const existing = convs.find(
+    (c) =>
+      !c.isGroup &&
+      c.participantIds.includes(userId1) &&
+      c.participantIds.includes(userId2)
+  );
+
+  if (existing) {
+    return existing;
+  }
+
+  const id = [userId1, userId2].sort().join('_');
+  const now = Date.now();
+  const newConv: Conversation = {
+    id,
+    participantIds: [userId1, userId2],
+    createdAt: now,
+    updatedAt: now,
+    unreadCount: { [userId1]: 0, [userId2]: 0 }
+  };
+
+  convs.unshift(newConv);
+  saveLocalConversations(convs);
+
+  if (isFirebaseConfigured && db) {
+    try {
+      await setDoc(doc(db, 'conversations', id), newConv, { merge: true });
+    } catch (err) {
+      console.warn('Firestore getOrCreateConversation note:', err);
+    }
+  }
+
+  return newConv;
+};
+
 export const getAllConversations = async (): Promise<Conversation[]> => {
   const local = getLocalConversations();
   if (isFirebaseConfigured && db) {
