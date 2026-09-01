@@ -21,7 +21,7 @@ import { useNotifications } from '../../contexts/NotificationContext';
 import { checkUsernameAvailable } from '../../services/userService';
 
 const ACCENT_COLORS: { id: ThemeColor; hex: string; name: string }[] = [
-  { id: 'emerald', hex: '#10b981', name: 'Teal Green' },
+  { id: 'emerald', hex: '#00a884', name: 'WhatsApp Emerald' },
   { id: 'crimson', hex: '#ef4444', name: 'Coral Red' },
   { id: 'purple', hex: '#a855f7', name: 'Purple' },
   { id: 'rose', hex: '#ec4899', name: 'Pink' },

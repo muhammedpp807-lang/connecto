@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { ThemeColor, BubbleSettings, BubbleRadius, BubbleFontSize, BubbleColorScheme } from '../types';
+import { safeGetItem, safeSetItem } from '../services/storageEngine';
 
 export type ThemeMode = 'light' | 'dark' | 'system';
 export type { ThemeColor };
@@ -67,14 +68,14 @@ export const THEME_COLOR_MAP: Record<ThemeColor, ThemeColorConfig> = {
   emerald: {
     id: 'emerald',
     name: 'WhatsApp Emerald',
-    primaryHex: '#059669',
-    bgClass: 'bg-emerald-600',
-    textClass: 'text-emerald-600 dark:text-emerald-400',
-    borderClass: 'border-emerald-600 dark:border-emerald-500',
-    ringClass: 'ring-emerald-500/30',
-    glowClass: 'shadow-emerald-500/20',
-    gradientFrom: 'from-emerald-600',
-    gradientTo: 'to-teal-600'
+    primaryHex: '#00a884',
+    bgClass: 'bg-[#008069] dark:bg-[#005c4b]',
+    textClass: 'text-[#00a884] dark:text-[#00a884]',
+    borderClass: 'border-[#00a884]',
+    ringClass: 'ring-[#00a884]/30',
+    glowClass: 'shadow-[#00a884]/20',
+    gradientFrom: 'from-[#00a884]',
+    gradientTo: 'to-[#005c4b]'
   },
   purple: {
     id: 'purple',
@@ -203,54 +204,54 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [theme, setThemeState] = useState<ThemeMode>(() => {
-    const saved = localStorage.getItem('connecto_theme');
+    const saved = safeGetItem<ThemeMode>('connecto_theme');
     if (saved === 'light' || saved === 'dark' || saved === 'system') return saved;
     return 'system';
   });
 
   const [themeColor, setThemeColorState] = useState<ThemeColor>(() => {
-    const saved = localStorage.getItem('connecto_theme_color');
+    const saved = safeGetItem<string>('connecto_theme_color');
     if (saved && Object.keys(THEME_COLOR_MAP).includes(saved)) {
       return saved as ThemeColor;
     }
-    return 'blue';
+    return 'emerald';
   });
 
   const [chatBackground, setChatBackgroundState] = useState<ChatBackground>(() => {
-    const saved = localStorage.getItem('connecto_chat_bg');
-    if (saved) return saved as ChatBackground;
+    const saved = safeGetItem<ChatBackground>('connecto_chat_bg');
+    if (saved) return saved;
     return 'default';
   });
 
   const [appBackground, setAppBackgroundState] = useState<AppBackground>(() => {
-    const saved = localStorage.getItem('connecto_app_bg');
-    if (saved) return saved as AppBackground;
+    const saved = safeGetItem<AppBackground>('connecto_app_bg');
+    if (saved) return saved;
     return 'default';
   });
 
   const [customAppWallpaper, setCustomAppWallpaperState] = useState<string>(() => {
-    return localStorage.getItem('connecto_custom_app_wallpaper') || '';
+    return safeGetItem<string>('connecto_custom_app_wallpaper') || '';
   });
 
   const [customChatWallpaper, setCustomChatWallpaperState] = useState<string>(() => {
-    return localStorage.getItem('connecto_custom_chat_wallpaper') || '';
+    return safeGetItem<string>('connecto_custom_chat_wallpaper') || '';
   });
 
   const [chatWallpaperBlur, setChatWallpaperBlurState] = useState<number>(() => {
-    const saved = localStorage.getItem('connecto_chat_blur');
+    const saved = safeGetItem<number | string>('connecto_chat_blur');
     return saved ? Number(saved) : 0;
   });
 
   const [chatWallpaperBrightness, setChatWallpaperBrightnessState] = useState<number>(() => {
-    const saved = localStorage.getItem('connecto_chat_brightness');
+    const saved = safeGetItem<number | string>('connecto_chat_brightness');
     return saved ? Number(saved) : 100;
   });
 
   const [bubbleSettings, setBubbleSettingsState] = useState<BubbleSettings>(() => {
     try {
-      const saved = localStorage.getItem('connecto_bubble_settings');
-      if (saved) {
-        return { ...DEFAULT_BUBBLE_SETTINGS, ...JSON.parse(saved) };
+      const saved = safeGetItem<Partial<BubbleSettings>>('connecto_bubble_settings');
+      if (saved && typeof saved === 'object') {
+        return { ...DEFAULT_BUBBLE_SETTINGS, ...saved };
       }
     } catch {
       // fallback
@@ -280,7 +281,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     };
 
     applyTheme();
-    localStorage.setItem('connecto_theme', theme);
+    safeSetItem('connecto_theme', theme);
 
     const listener = () => {
       if (theme === 'system') applyTheme();
@@ -308,50 +309,50 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const setThemeColor = (color: ThemeColor) => {
     setThemeColorState(color);
-    localStorage.setItem('connecto_theme_color', color);
+    safeSetItem('connecto_theme_color', color);
   };
 
   const setChatBackground = (bg: ChatBackground) => {
     setChatBackgroundState(bg);
-    localStorage.setItem('connecto_chat_bg', bg);
+    safeSetItem('connecto_chat_bg', bg);
   };
 
   const setAppBackground = (bg: AppBackground) => {
     setAppBackgroundState(bg);
-    localStorage.setItem('connecto_app_bg', bg);
+    safeSetItem('connecto_app_bg', bg);
   };
 
   const setCustomAppWallpaper = (url: string) => {
     setCustomAppWallpaperState(url);
-    localStorage.setItem('connecto_custom_app_wallpaper', url);
+    safeSetItem('connecto_custom_app_wallpaper', url);
   };
 
   const setCustomChatWallpaper = (url: string) => {
     setCustomChatWallpaperState(url);
-    localStorage.setItem('connecto_custom_chat_wallpaper', url);
+    safeSetItem('connecto_custom_chat_wallpaper', url);
   };
 
   const setChatWallpaperBlur = (blur: number) => {
     setChatWallpaperBlurState(blur);
-    localStorage.setItem('connecto_chat_blur', String(blur));
+    safeSetItem('connecto_chat_blur', blur);
   };
 
   const setChatWallpaperBrightness = (brightness: number) => {
     setChatWallpaperBrightnessState(brightness);
-    localStorage.setItem('connecto_chat_brightness', String(brightness));
+    safeSetItem('connecto_chat_brightness', brightness);
   };
 
   const setBubbleSettings = (partial: Partial<BubbleSettings>) => {
     setBubbleSettingsState((prev) => {
       const updated = { ...prev, ...partial };
-      localStorage.setItem('connecto_bubble_settings', JSON.stringify(updated));
+      safeSetItem('connecto_bubble_settings', updated);
       return updated;
     });
   };
 
   const resetBubbleSettings = () => {
     setBubbleSettingsState(DEFAULT_BUBBLE_SETTINGS);
-    localStorage.setItem('connecto_bubble_settings', JSON.stringify(DEFAULT_BUBBLE_SETTINGS));
+    safeSetItem('connecto_bubble_settings', DEFAULT_BUBBLE_SETTINGS);
   };
 
   const colorConfig = THEME_COLOR_MAP[themeColor] || THEME_COLOR_MAP.blue;

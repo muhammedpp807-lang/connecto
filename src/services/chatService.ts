@@ -17,6 +17,7 @@ import {
 import { db, isFirebaseConfigured } from '../firebase/config';
 import { Conversation, Message, MessageType } from '../types';
 import { getAllUsers } from './userService';
+import { safeGetItem, safeSetItem, safeRemoveItem, isFirestoreQuotaExhausted, handleFirestoreError } from './storageEngine';
 
 const LOCAL_CONVERSATIONS_KEY = 'connecto_db_conversations';
 const LOCAL_MESSAGES_KEY = 'connecto_db_messages';
@@ -25,6 +26,10 @@ const LOCAL_MESSAGES_KEY = 'connecto_db_messages';
 const chatChannel = typeof window !== 'undefined' && 'BroadcastChannel' in window
   ? new BroadcastChannel('connecto_chat_channel')
   : null;
+
+// In-memory listeners for immediate same-tab UI synchronization
+const localMessageListeners = new Map<string, Set<(msgs: Message[]) => void>>();
+const localConversationListeners = new Set<(convs: Conversation[]) => void>();
 
 const FAKE_CONV_IDS = new Set(['seed_conv_bot', 'seed_conv_sarah']);
 
@@ -43,16 +48,14 @@ function purgeFakeConvs(convs: Conversation[]): Conversation[] {
 
 export function getLocalConversations(): Conversation[] {
   try {
-    const raw = localStorage.getItem(LOCAL_CONVERSATIONS_KEY);
+    const raw = safeGetItem<Conversation[]>(LOCAL_CONVERSATIONS_KEY);
     if (raw) {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) {
-        const cleaned = purgeFakeConvs(parsed);
-        if (cleaned.length !== parsed.length) {
-          saveLocalConversations(cleaned);
-        }
-        return cleaned;
+      const parsed = Array.isArray(raw) ? raw : [];
+      const cleaned = purgeFakeConvs(parsed);
+      if (cleaned.length !== parsed.length) {
+        saveLocalConversations(cleaned);
       }
+      return cleaned;
     }
   } catch (err) {
     console.error('Error parsing local conversations:', err);
@@ -63,8 +66,15 @@ export function getLocalConversations(): Conversation[] {
 export function saveLocalConversations(convs: Conversation[]) {
   try {
     const cleaned = purgeFakeConvs(convs);
-    localStorage.setItem(LOCAL_CONVERSATIONS_KEY, JSON.stringify(cleaned));
+    safeSetItem(LOCAL_CONVERSATIONS_KEY, cleaned);
+    // Trigger in-memory same-tab listeners immediately
+    localConversationListeners.forEach((cb) => {
+      try { cb(cleaned); } catch {}
+    });
     chatChannel?.postMessage({ type: 'CONVERSATIONS_UPDATED' });
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('connecto_conversations_updated'));
+    }
   } catch (err) {
     console.error('Error saving local conversations:', err);
   }
@@ -72,10 +82,9 @@ export function saveLocalConversations(convs: Conversation[]) {
 
 export function getLocalMessages(convId: string): Message[] {
   try {
-    const raw = localStorage.getItem(`${LOCAL_MESSAGES_KEY}_${convId}`);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) return parsed;
+    const raw = safeGetItem<Message[]>(`${LOCAL_MESSAGES_KEY}_${convId}`);
+    if (raw && Array.isArray(raw)) {
+      return raw;
     }
   } catch (err) {
     console.error('Error parsing local messages:', err);
@@ -85,8 +94,18 @@ export function getLocalMessages(convId: string): Message[] {
 
 export function saveLocalMessages(convId: string, messages: Message[]) {
   try {
-    localStorage.setItem(`${LOCAL_MESSAGES_KEY}_${convId}`, JSON.stringify(messages));
+    safeSetItem(`${LOCAL_MESSAGES_KEY}_${convId}`, messages);
+    // Trigger in-memory same-tab listeners immediately
+    const listeners = localMessageListeners.get(convId);
+    if (listeners) {
+      listeners.forEach((cb) => {
+        try { cb(messages); } catch {}
+      });
+    }
     chatChannel?.postMessage({ type: 'MESSAGES_UPDATED', convId });
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('connecto_messages_updated', { detail: { convId } }));
+    }
   } catch (err) {
     console.error('Error saving local messages:', err);
   }
@@ -161,6 +180,9 @@ export const subscribeToConversations = (
 
   fetchAndPush();
 
+  // In-memory listener for same-tab updates
+  localConversationListeners.add(fetchAndPush);
+
   const handleBroadcast = (e: MessageEvent) => {
     if (
       e.data?.type === 'CONVERSATIONS_UPDATED' ||
@@ -174,11 +196,14 @@ export const subscribeToConversations = (
 
   chatChannel?.addEventListener('message', handleBroadcast);
   window.addEventListener('storage', fetchAndPush);
+  window.addEventListener('connecto_conversations_updated', fetchAndPush);
 
   return () => {
     unsubFirestore?.();
+    localConversationListeners.delete(fetchAndPush);
     chatChannel?.removeEventListener('message', handleBroadcast);
     window.removeEventListener('storage', fetchAndPush);
+    window.removeEventListener('connecto_conversations_updated', fetchAndPush);
   };
 };
 
@@ -222,6 +247,13 @@ export const subscribeToMessages = (
 
   fetchAndPush();
 
+  // In-memory listener registration for zero-latency local updates
+  if (!localMessageListeners.has(conversationId)) {
+    localMessageListeners.set(conversationId, new Set());
+  }
+  const convListeners = localMessageListeners.get(conversationId)!;
+  convListeners.add(onUpdate);
+
   const handleBroadcast = (e: MessageEvent) => {
     if (
       (e.data?.type === 'MESSAGES_UPDATED' && (!e.data.convId || e.data.convId === conversationId)) ||
@@ -236,6 +268,10 @@ export const subscribeToMessages = (
 
   return () => {
     unsubFirestore?.();
+    convListeners.delete(onUpdate);
+    if (convListeners.size === 0) {
+      localMessageListeners.delete(conversationId);
+    }
     chatChannel?.removeEventListener('message', handleBroadcast);
     window.removeEventListener('storage', fetchAndPush);
   };
@@ -306,7 +342,7 @@ export const createGroupConversation = async (
   saveLocalMessages(groupId, [initialMsg]);
 
   // 3. Sync to Firestore
-  if (isFirebaseConfigured && db) {
+  if (isFirebaseConfigured && db && !isFirestoreQuotaExhausted()) {
     try {
       const convRef = doc(db, 'conversations', groupId);
       const msgRef = doc(db, 'conversations', groupId, 'messages', initialMsg.id);
@@ -319,6 +355,7 @@ export const createGroupConversation = async (
         3000
       );
     } catch (err) {
+      handleFirestoreError(err);
       console.warn('Firestore group creation sync note:', err);
     }
   }
@@ -350,7 +387,7 @@ export const updateGroupDetails = async (
     saveLocalConversations(convs);
   }
 
-  if (isFirebaseConfigured && db) {
+  if (isFirebaseConfigured && db && !isFirestoreQuotaExhausted()) {
     try {
       const convRef = doc(db, 'conversations', conversationId);
       await withTimeout(
@@ -361,6 +398,7 @@ export const updateGroupDetails = async (
         2500
       );
     } catch (err) {
+      handleFirestoreError(err);
       console.warn('Firestore updateGroupDetails note:', err);
     }
   }
@@ -412,7 +450,7 @@ export const addGroupMembers = async (
     msgs.push(sysMsg);
     saveLocalMessages(conversationId, msgs);
 
-    if (isFirebaseConfigured && db) {
+    if (isFirebaseConfigured && db && !isFirestoreQuotaExhausted()) {
       try {
         const convRef = doc(db, 'conversations', conversationId);
         const msgRef = doc(db, 'conversations', conversationId, 'messages', sysMsg.id);
@@ -430,6 +468,7 @@ export const addGroupMembers = async (
           2500
         );
       } catch (err) {
+        handleFirestoreError(err);
         console.warn('Firestore addGroupMembers note:', err);
       }
     }
@@ -483,7 +522,7 @@ export const removeGroupMember = async (
     msgs.push(sysMsg);
     saveLocalMessages(conversationId, msgs);
 
-    if (isFirebaseConfigured && db) {
+    if (isFirebaseConfigured && db && !isFirestoreQuotaExhausted()) {
       try {
         const convRef = doc(db, 'conversations', conversationId);
         const msgRef = doc(db, 'conversations', conversationId, 'messages', sysMsg.id);
@@ -502,6 +541,7 @@ export const removeGroupMember = async (
           2500
         );
       } catch (err) {
+        handleFirestoreError(err);
         console.warn('Firestore removeGroupMember note:', err);
       }
     }
@@ -536,7 +576,7 @@ export const toggleGroupAdmin = async (
     };
     saveLocalConversations(convs);
 
-    if (isFirebaseConfigured && db) {
+    if (isFirebaseConfigured && db && !isFirestoreQuotaExhausted()) {
       try {
         const convRef = doc(db, 'conversations', conversationId);
         await withTimeout(
@@ -547,6 +587,7 @@ export const toggleGroupAdmin = async (
           2000
         );
       } catch (err) {
+        handleFirestoreError(err);
         console.warn('Firestore toggleGroupAdmin note:', err);
       }
     }
@@ -568,6 +609,14 @@ export const sendMessage = async (
     audioWaveform?: number[];
     senderName?: string;
     senderAvatar?: string;
+    replyTo?: {
+      id: string;
+      senderName?: string;
+      text?: string;
+      type?: MessageType;
+      fileUrl?: string;
+      stickerEmoji?: string;
+    };
   }
 ): Promise<void> => {
   if (!data) return;
@@ -591,6 +640,7 @@ export const sendMessage = async (
     videoDuration: data.videoDuration,
     audioDuration: data.audioDuration,
     audioWaveform: data.audioWaveform,
+    replyTo: data.replyTo,
     delivered: true,
     read: false,
     createdAt: now,
@@ -608,6 +658,8 @@ export const sendMessage = async (
     ? '📷 Photo' 
     : data.type === 'video'
     ? '🎥 Video'
+    : data.type === 'sticker'
+    ? `🎨 Sticker ${data.text || ''}`
     : `[${data.type.toUpperCase()}]`;
 
   const unreadUpdates: Record<string, number> = {};
@@ -666,7 +718,7 @@ export const sendMessage = async (
   saveLocalConversations(convs);
 
   // Sync to Firestore in the background
-  if (isFirebaseConfigured && db) {
+  if (isFirebaseConfigured && db && !isFirestoreQuotaExhausted()) {
     try {
       const messagesRef = collection(db, 'conversations', conversationId, 'messages');
       const convRef = doc(db, 'conversations', conversationId);
@@ -683,6 +735,7 @@ export const sendMessage = async (
         fileName: data.fileName || null,
         fileSize: data.fileSize || null,
         videoDuration: data.videoDuration || null,
+        replyTo: data.replyTo || null,
         delivered: true,
         read: false,
         createdAt: now,
@@ -708,6 +761,7 @@ export const sendMessage = async (
         2500
       );
     } catch (err) {
+      handleFirestoreError(err);
       console.warn('Firestore sendMessage sync note:', err);
     }
   }
@@ -717,13 +771,14 @@ export const markConversationAsRead = async (
   conversationId: string,
   userId: string
 ): Promise<void> => {
-  if (isFirebaseConfigured && db) {
+  if (isFirebaseConfigured && db && !isFirestoreQuotaExhausted()) {
     try {
       const convRef = doc(db, 'conversations', conversationId);
       await updateDoc(convRef, {
         [`unreadCount.${userId}`]: 0
       });
-    } catch {
+    } catch (err) {
+      handleFirestoreError(err);
       // Non-blocking
     }
   }
@@ -759,14 +814,15 @@ export const setTypingStatus = async (
   userId: string,
   isTyping: boolean
 ): Promise<void> => {
-  if (isFirebaseConfigured && db) {
+  if (isFirebaseConfigured && db && !isFirestoreQuotaExhausted()) {
     try {
       const convRef = doc(db, 'conversations', conversationId);
       await updateDoc(convRef, {
         [`typingUsers.${userId}`]: isTyping
       });
       return;
-    } catch {
+    } catch (err) {
+      handleFirestoreError(err);
       // Non-blocking
     }
   }
@@ -798,6 +854,18 @@ export const addMessageReaction = async (
       msg.reactions[userId] = emoji;
     }
     saveLocalMessages(conversationId, msgs);
+
+    if (isFirebaseConfigured && db && !isFirestoreQuotaExhausted()) {
+      try {
+        const msgRef = doc(db, 'conversations', conversationId, 'messages', messageId);
+        await updateDoc(msgRef, {
+          reactions: msg.reactions
+        });
+      } catch (err) {
+        handleFirestoreError(err);
+        console.warn('Firestore reaction sync note:', err);
+      }
+    }
   }
 };
 
@@ -841,7 +909,7 @@ export const deleteMessageForEveryone = async (
     }
 
     // Sync to Firestore
-    if (isFirebaseConfigured && db) {
+    if (isFirebaseConfigured && db && !isFirestoreQuotaExhausted()) {
       try {
         const msgRef = doc(db, 'conversations', conversationId, 'messages', messageId);
         const convRef = doc(db, 'conversations', conversationId);
@@ -865,6 +933,7 @@ export const deleteMessageForEveryone = async (
           2500
         );
       } catch (err) {
+        handleFirestoreError(err);
         console.warn('Firestore deleteMessageForEveryone note:', err);
       }
     }
@@ -895,7 +964,7 @@ export const deleteMessageForMe = async (
     }
 
     // Sync to Firestore
-    if (isFirebaseConfigured && db) {
+    if (isFirebaseConfigured && db && !isFirestoreQuotaExhausted()) {
       try {
         const msgRef = doc(db, 'conversations', conversationId, 'messages', messageId);
         const updatedUsers = Array.from(new Set([...existingUsers, userId]));
@@ -907,6 +976,7 @@ export const deleteMessageForMe = async (
           2000
         );
       } catch (err) {
+        handleFirestoreError(err);
         console.warn('Firestore deleteMessageForMe note:', err);
       }
     }
@@ -915,10 +985,11 @@ export const deleteMessageForMe = async (
 
 export const deleteConversation = async (conversationId: string): Promise<void> => {
   // 1. Delete from Firestore if enabled
-  if (isFirebaseConfigured && db) {
+  if (isFirebaseConfigured && db && !isFirestoreQuotaExhausted()) {
     try {
       await deleteDoc(doc(db, 'conversations', conversationId));
     } catch (err) {
+      handleFirestoreError(err);
       console.warn('Firestore deleteConversation note:', err);
     }
   }
@@ -929,7 +1000,7 @@ export const deleteConversation = async (conversationId: string): Promise<void> 
   saveLocalConversations(updated);
 
   // 3. Remove local message cache
-  localStorage.removeItem(`${LOCAL_MESSAGES_KEY}_${conversationId}`);
+  safeRemoveItem(`${LOCAL_MESSAGES_KEY}_${conversationId}`);
 
   chatChannel?.postMessage({ type: 'CONVERSATIONS_UPDATED' });
   chatChannel?.postMessage({ type: 'MESSAGES_UPDATED', convId: conversationId });
@@ -964,10 +1035,11 @@ export const getOrCreateConversation = async (
   convs.unshift(newConv);
   saveLocalConversations(convs);
 
-  if (isFirebaseConfigured && db) {
+  if (isFirebaseConfigured && db && !isFirestoreQuotaExhausted()) {
     try {
       await setDoc(doc(db, 'conversations', id), newConv, { merge: true });
     } catch (err) {
+      handleFirestoreError(err);
       console.warn('Firestore getOrCreateConversation note:', err);
     }
   }
@@ -977,24 +1049,26 @@ export const getOrCreateConversation = async (
 
 export const getAllConversations = async (): Promise<Conversation[]> => {
   const local = getLocalConversations();
+  const mergedMap = new Map<string, Conversation>();
+  local.forEach((c) => mergedMap.set(c.id, c));
+
   if (isFirebaseConfigured && db) {
     try {
       const convsRef = collection(db, 'conversations');
       const snapshot = await withTimeout(getDocs(convsRef), 1500);
-      const results: Conversation[] = [];
       snapshot.forEach((d) => {
-        results.push({ id: d.id, ...d.data() } as Conversation);
+        const conv = { id: d.id, ...d.data() } as Conversation;
+        const existing = mergedMap.get(conv.id);
+        mergedMap.set(conv.id, existing ? { ...existing, ...conv } : conv);
       });
-      if (results.length > 0) {
-        const cleaned = purgeFakeConvs(results);
-        saveLocalConversations(cleaned);
-        return cleaned;
-      }
     } catch (err) {
       console.warn('Firestore getAllConversations note:', err);
     }
   }
-  return local;
+
+  const merged = purgeFakeConvs(Array.from(mergedMap.values()));
+  saveLocalConversations(merged);
+  return merged;
 };
 
 export const getSystemStats = async (): Promise<{

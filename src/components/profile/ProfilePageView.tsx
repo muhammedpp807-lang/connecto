@@ -197,23 +197,19 @@ export const ProfilePageView: React.FC = () => {
       <div className="flex flex-col items-center -mt-16 sm:-mt-20 px-6 pb-12 space-y-4">
         {/* Large Centered Avatar with Camera Badge */}
         <div className="relative group cursor-pointer" onClick={() => avatarInputRef.current?.click()}>
-          <div className="w-28 h-28 sm:w-32 sm:h-32 rounded-full ring-4 ring-[#f0f2f5] dark:ring-[#0b141a] overflow-hidden bg-slate-200 dark:bg-[#202c33] shadow-2xl flex items-center justify-center">
+          <div className="w-28 h-28 sm:w-32 sm:h-32 rounded-full ring-4 ring-[#f0f2f5] dark:ring-[#0b141a] overflow-hidden shadow-2xl flex items-center justify-center">
             {profile?.photoURL ? (
               <img
                 src={profile.photoURL}
                 alt={profile.displayName || 'Profile'}
                 className="w-full h-full object-cover"
               />
-            ) : initials ? (
+            ) : (
               <div 
                 style={{ backgroundColor: colorConfig.primaryHex }}
-                className="w-full h-full flex items-center justify-center text-white text-3xl sm:text-4xl font-bold tracking-tight"
+                className="w-full h-full flex items-center justify-center text-white text-3xl sm:text-4xl font-bold tracking-tight uppercase"
               >
-                {initials}
-              </div>
-            ) : (
-              <div className="w-full h-full bg-slate-300 dark:bg-[#202c33] flex items-center justify-center text-slate-600 dark:text-slate-300">
-                <User className="w-14 h-14 stroke-[1.75]" />
+                {initials || 'U'}
               </div>
             )}
           </div>

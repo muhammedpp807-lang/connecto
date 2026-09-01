@@ -153,6 +153,8 @@ export const AdminPage: React.FC = () => {
     }
   };
 
+  const isGroupConv = (c: Conversation) => Boolean(c.isGroup || c.groupName || (c.id && c.id.startsWith('group_')));
+
   const filteredUsers = users.filter((u) => {
     const s = search.toLowerCase();
     return (
@@ -162,8 +164,9 @@ export const AdminPage: React.FC = () => {
     );
   });
 
-  const filteredGroups = conversations.filter((c) => {
-    if (!c.isGroup) return false;
+  const allGroups = conversations.filter(isGroupConv);
+
+  const filteredGroups = allGroups.filter((c) => {
     const s = search.toLowerCase();
     return (
       (c.groupName || '').toLowerCase().includes(s) ||
@@ -362,7 +365,7 @@ export const AdminPage: React.FC = () => {
               <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Active Groups</span>
               <MessagesSquare className="w-4 h-4 text-emerald-500" />
             </div>
-            <p className="text-2xl font-black">{conversations.filter((c) => c.isGroup).length}</p>
+            <p className="text-2xl font-black">{allGroups.length}</p>
             <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">Total: {stats.totalConversations} channels</p>
           </div>
 
@@ -396,7 +399,7 @@ export const AdminPage: React.FC = () => {
                 : 'bg-white dark:bg-[#161b22] text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-[#1e2530]'
             }`}
           >
-            <MessagesSquare className="w-4 h-4" /> Group Chats ({conversations.filter((c) => c.isGroup).length})
+            <MessagesSquare className="w-4 h-4" /> Group Chats ({allGroups.length})
           </button>
         </div>
 

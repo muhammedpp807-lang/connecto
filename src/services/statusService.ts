@@ -11,6 +11,7 @@ import {
 } from 'firebase/firestore';
 import { db, isFirebaseConfigured } from '../firebase/config';
 import { StatusItem, StatusViewer, UserStatusGroup, StatusExpiryOption } from '../types';
+import { safeGetItem, safeSetItem, isFirestoreQuotaExhausted, handleFirestoreError } from './storageEngine';
 
 const LOCAL_STATUSES_KEY = 'connecto_db_statuses';
 
@@ -76,9 +77,9 @@ export function formatStatusTimeRemaining(expiresAt: number): string {
 
 function getLocalStatuses(): StatusItem[] {
   try {
-    const raw = localStorage.getItem(LOCAL_STATUSES_KEY);
+    const raw = safeGetItem<StatusItem[]>(LOCAL_STATUSES_KEY);
     if (!raw) return [];
-    const items: StatusItem[] = JSON.parse(raw);
+    const items: StatusItem[] = Array.isArray(raw) ? raw : [];
     const now = Date.now();
     // Filter out expired (s.expiresAt === 0 means NEVER expires)
     return items.filter((s) => s && (s.expiresAt === 0 || s.expiresAt > now));
@@ -91,8 +92,11 @@ function saveLocalStatuses(items: StatusItem[]): void {
   try {
     const now = Date.now();
     const valid = items.filter((s) => s && (s.expiresAt === 0 || s.expiresAt > now));
-    localStorage.setItem(LOCAL_STATUSES_KEY, JSON.stringify(valid));
+    safeSetItem(LOCAL_STATUSES_KEY, valid);
     statusChannel?.postMessage({ type: 'STATUS_UPDATED', timestamp: Date.now() });
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('connecto_status_updated'));
+    }
   } catch (err) {
     console.error('Failed to save local statuses:', err);
   }
@@ -139,11 +143,12 @@ export async function createStatus(
   saveLocalStatuses(current);
 
   // 2. Save to Firestore asynchronously without blocking local UI
-  if (isFirebaseConfigured && db) {
+  if (isFirebaseConfigured && db && !isFirestoreQuotaExhausted()) {
     try {
       const sanitized = sanitizeForFirestore(newStatus);
       await setDoc(doc(db, 'statuses', id), sanitized);
     } catch (err) {
+      handleFirestoreError(err);
       console.warn('Firestore createStatus note:', err);
     }
   }
@@ -245,13 +250,17 @@ export function subscribeToStatuses(
   // Immediate emit from local storage (<1ms)
   emitGroups(getLocalStatuses());
 
-  // Listen to BroadcastChannel for instant local updates
+  // Listen to BroadcastChannel and window events for instant local updates
   const handleMessage = () => {
     if (!isUnsubscribed) {
       emitGroups(getLocalStatuses());
     }
   };
   statusChannel?.addEventListener('message', handleMessage);
+  if (typeof window !== 'undefined') {
+    window.addEventListener('connecto_status_updated', handleMessage);
+    window.addEventListener('storage', handleMessage);
+  }
 
   // If Firebase is configured, subscribe to Firestore statuses
   let firestoreUnsub: Unsubscribe | null = null;
@@ -293,6 +302,10 @@ export function subscribeToStatuses(
   return () => {
     isUnsubscribed = true;
     statusChannel?.removeEventListener('message', handleMessage);
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('connecto_status_updated', handleMessage);
+      window.removeEventListener('storage', handleMessage);
+    }
     if (firestoreUnsub) {
       firestoreUnsub();
     }

@@ -4,6 +4,7 @@ import { UserStatusGroup } from '../../types';
 import { useAuth } from '../../contexts/AuthContext';
 import { subscribeToStatuses } from '../../services/statusService';
 import { Avatar } from '../common/Avatar';
+import { StatusThumbnailCircle } from './StatusThumbnailCircle';
 import { CreateStatusModal } from './CreateStatusModal';
 import { StatusViewerModal } from './StatusViewerModal';
 
@@ -58,9 +59,10 @@ export const StatusBar: React.FC<StatusBarProps> = ({ className = '' }) => {
                 ? 'bg-gradient-to-tr from-emerald-500 via-teal-400 to-blue-500 ring-2 ring-emerald-500/40 shadow-sm'
                 : 'border-2 border-dashed border-slate-300 dark:border-slate-600'
             }`}>
-              <Avatar
-                src={profile?.photoURL}
-                name={profile?.displayName || 'Me'}
+              <StatusThumbnailCircle
+                status={myGroup && myGroup.statuses.length > 0 ? myGroup.statuses[myGroup.statuses.length - 1] : null}
+                userAvatar={profile?.photoURL}
+                userName={profile?.displayName || 'Me'}
                 size="md"
               />
             </div>
@@ -98,6 +100,7 @@ export const StatusBar: React.FC<StatusBarProps> = ({ className = '' }) => {
 
         {/* 3. Other Users' Status Groups */}
         {otherGroups.map((group) => {
+          const latest = group.statuses[group.statuses.length - 1];
           return (
             <div
               key={group.userId}
@@ -109,9 +112,10 @@ export const StatusBar: React.FC<StatusBarProps> = ({ className = '' }) => {
                   ? 'bg-gradient-to-tr from-rose-500 via-amber-400 to-emerald-500 ring-2 ring-emerald-500/60 animate-pulse'
                   : 'bg-slate-300 dark:bg-slate-700'
               }`}>
-                <Avatar
-                  src={group.userAvatar}
-                  name={group.userName}
+                <StatusThumbnailCircle
+                  status={latest}
+                  userAvatar={group.userAvatar}
+                  userName={group.userName}
                   size="md"
                 />
               </div>

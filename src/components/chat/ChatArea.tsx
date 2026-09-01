@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Conversation, Message, UserProfile } from '../../types';
+import { Conversation, Message, UserProfile, MessageReplyTarget } from '../../types';
 import { useAuth } from '../../contexts/AuthContext';
-import { subscribeToMessages, markConversationAsRead, getLocalConversations } from '../../services/chatService';
+import { subscribeToMessages, markConversationAsRead, getLocalConversations, sendMessage, addMessageReaction } from '../../services/chatService';
 import { ChatHeader } from './ChatHeader';
 import { MessageBubble } from './MessageBubble';
 import { MessageComposer } from './MessageComposer';
 import { TypingIndicator } from './TypingIndicator';
 import { ImageViewerModal } from './ImageViewerModal';
 import { MediaEditorModal } from './MediaEditorModal';
+import { StickerPickerModal } from './StickerPickerModal';
 import { formatMessageDateDivider } from '../../utils/dateUtils';
 import { Logo } from '../common/Logo';
 import { ShieldCheck, WifiOff, UploadCloud, Users, Sparkles } from 'lucide-react';
@@ -15,7 +16,6 @@ import { useNetworkStatus } from '../../hooks/useNetworkStatus';
 import { useNotifications } from '../../contexts/NotificationContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { uploadMediaFile } from '../../services/storageService';
-import { sendMessage } from '../../services/chatService';
 import { playSentSound } from '../../utils/soundUtils';
 
 interface ChatAreaProps {
@@ -51,6 +51,11 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   const [droppedMediaToEdit, setDroppedMediaToEdit] = useState<DroppedMediaToEdit | null>(null);
   const [currentConversation, setCurrentConversation] = useState<Conversation | null>(propConversation || null);
 
+  // Reply & Sticker interaction state
+  const [replyingTo, setReplyingTo] = useState<MessageReplyTarget | null>(null);
+  const [showStickerModal, setShowStickerModal] = useState(false);
+  const [stickerTargetMessage, setStickerTargetMessage] = useState<Message | null>(null);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
@@ -81,12 +86,32 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
     return () => unsubscribe();
   }, [conversationId, profile]);
 
-  // Scroll to bottom when messages update
-  useEffect(() => {
-    if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+  const scrollToBottom = (instant = false) => {
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
     }
-  }, [messages]);
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: instant ? 'auto' : 'smooth' });
+    }
+  };
+
+  // Instant scroll to newest/last message when conversation opens
+  useEffect(() => {
+    scrollToBottom(true);
+    const timer1 = setTimeout(() => scrollToBottom(true), 30);
+    const timer2 = setTimeout(() => scrollToBottom(true), 120);
+    return () => {
+      clearTimeout(timer1);
+      clearTimeout(timer2);
+    };
+  }, [conversationId]);
+
+  // Scroll when messages arrive
+  useEffect(() => {
+    if (messages.length > 0) {
+      scrollToBottom(false);
+    }
+  }, [messages.length]);
 
   // Drag & drop media files onto chat area
   const handleDragOver = (e: React.DragEvent) => {
@@ -209,6 +234,60 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
       const match = convs.find((c) => c.id === conversationId);
       if (match) setCurrentConversation(match);
     }
+  };
+
+  const handleReply = (msg: Message) => {
+    setReplyingTo({
+      id: msg.id,
+      senderName: msg.senderName,
+      text: msg.text,
+      type: msg.type,
+      fileUrl: msg.fileUrl
+    });
+  };
+
+  const handleReplySticker = (msg: Message) => {
+    setStickerTargetMessage(msg);
+    setShowStickerModal(true);
+  };
+
+  const handleOpenStickerPicker = () => {
+    setStickerTargetMessage(null);
+    setShowStickerModal(true);
+  };
+
+  const handleSelectSticker = async (stickerEmoji: string) => {
+    if (!conversationId || !profile) return;
+    try {
+      if (stickerTargetMessage) {
+        // Direct zero-latency sticker reaction on the message (like in Image 4)
+        await addMessageReaction(conversationId, stickerTargetMessage.id, profile.uid, stickerEmoji);
+        if (settings.sounds) playSentSound();
+        showToast('success', 'Sticker reaction added!');
+      } else {
+        // Send as sticker message
+        await sendMessage(conversationId, profile.uid, recipient?.uid, {
+          text: stickerEmoji,
+          type: 'sticker',
+          replyTo: replyingTo || undefined,
+          senderName: profile.displayName,
+          senderAvatar: profile.photoURL
+        });
+        if (settings.sounds) playSentSound();
+        showToast('success', 'Sticker sent!');
+      }
+    } catch {
+      showToast('error', 'Failed to send sticker');
+    } finally {
+      setShowStickerModal(false);
+      setStickerTargetMessage(null);
+      setReplyingTo(null);
+    }
+  };
+
+  const handleDeleteMessageLocally = (msgId: string) => {
+    // Immediate zero-latency local disappearance
+    setMessages((prev) => prev.filter((m) => m.id !== msgId));
   };
 
   // Empty state: No chat selected
@@ -356,6 +435,9 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
                 isGroup={isGroup}
                 currentUserId={profile.uid}
                 onImageClick={(url) => setActiveImagePreview(url)}
+                onReply={handleReply}
+                onReplySticker={handleReplySticker}
+                onDeleteMessageLocally={handleDeleteMessageLocally}
               />
             </React.Fragment>
           );
@@ -381,7 +463,22 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
         senderName={profile.displayName}
         senderAvatar={profile.photoURL}
         isGroup={isGroup}
+        replyingTo={replyingTo}
+        onCancelReply={() => setReplyingTo(null)}
+        onOpenStickers={handleOpenStickerPicker}
       />
+
+      {/* Sticker Picker Modal */}
+      {showStickerModal && (
+        <StickerPickerModal
+          onSelectSticker={(stickerEmoji) => handleSelectSticker(stickerEmoji)}
+          onClose={() => {
+            setShowStickerModal(false);
+            setStickerTargetMessage(null);
+          }}
+          replyingToSender={stickerTargetMessage?.senderName || replyingTo?.senderName}
+        />
+      )}
 
       {/* Fullscreen Lightbox Image Viewer */}
       {activeImagePreview && (

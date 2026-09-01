@@ -11,6 +11,7 @@ import {
   RegisterParams 
 } from '../services/authService';
 import { getUserProfile, setUserOnlineStatus, updateUserProfile } from '../services/userService';
+import { safeSetItem, safeRemoveItem } from '../services/storageEngine';
 
 interface AuthContextType {
   currentUser: FirebaseUser | null;
@@ -36,7 +37,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const p = await getUserProfile(uid);
       if (p) {
         setProfile(p);
-        localStorage.setItem('connecto_session_user', JSON.stringify(p));
+        safeSetItem('connecto_session_user', p);
       }
     } catch (err) {
       console.error('Error fetching profile:', err);
@@ -106,7 +107,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const uid = profile?.uid;
     setProfile(null);
     setCurrentUser(null);
-    localStorage.removeItem('connecto_session_user');
+    safeRemoveItem('connecto_session_user');
     logoutUser(uid).catch(() => {});
   };
 
@@ -115,7 +116,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await updateUserProfile(profile.uid, updates);
     const updated = { ...profile, ...updates, updatedAt: Date.now() };
     setProfile(updated);
-    localStorage.setItem('connecto_session_user', JSON.stringify(updated));
+    safeSetItem('connecto_session_user', updated);
   };
 
   const refreshProfile = async () => {

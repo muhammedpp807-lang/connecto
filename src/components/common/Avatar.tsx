@@ -1,5 +1,4 @@
 import React from 'react';
-import { User } from 'lucide-react';
 
 interface AvatarProps {
   src?: string;
@@ -8,6 +7,29 @@ interface AvatarProps {
   isOnline?: boolean;
   showOnlineStatus?: boolean;
   className?: string;
+}
+
+// Deterministic pastel background based on name
+const AVATAR_BG_COLORS = [
+  'bg-emerald-600 dark:bg-emerald-700',
+  'bg-blue-600 dark:bg-blue-700',
+  'bg-indigo-600 dark:bg-indigo-700',
+  'bg-purple-600 dark:bg-purple-700',
+  'bg-pink-600 dark:bg-pink-700',
+  'bg-rose-600 dark:bg-rose-700',
+  'bg-amber-600 dark:bg-amber-700',
+  'bg-teal-600 dark:bg-teal-700',
+  'bg-cyan-600 dark:bg-cyan-700'
+];
+
+function getAvatarBgColor(str: string): string {
+  if (!str) return AVATAR_BG_COLORS[0];
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const idx = Math.abs(hash) % AVATAR_BG_COLORS.length;
+  return AVATAR_BG_COLORS[idx];
 }
 
 export const Avatar: React.FC<AvatarProps> = ({
@@ -19,21 +41,12 @@ export const Avatar: React.FC<AvatarProps> = ({
   className = ''
 }) => {
   const sizeMap = {
-    xs: 'w-6 h-6 text-xs',
+    xs: 'w-6 h-6 text-[10px]',
     sm: 'w-8 h-8 text-xs',
     md: 'w-10 h-10 text-sm',
     lg: 'w-12 h-12 text-base',
     xl: 'w-16 h-16 text-lg',
     '2xl': 'w-24 h-24 text-2xl'
-  };
-
-  const iconSizeMap = {
-    xs: 'w-3.5 h-3.5',
-    sm: 'w-4 h-4',
-    md: 'w-5 h-5',
-    lg: 'w-6 h-6',
-    xl: 'w-8 h-8',
-    '2xl': 'w-12 h-12'
   };
 
   const statusDotSize = {
@@ -54,7 +67,7 @@ export const Avatar: React.FC<AvatarProps> = ({
         .join('')
         .substring(0, 2)
         .toUpperCase()
-    : '';
+    : 'U';
 
   const [imgError, setImgError] = React.useState(false);
 
@@ -63,23 +76,27 @@ export const Avatar: React.FC<AvatarProps> = ({
     setImgError(false);
   }, [src]);
 
+  const bgColorClass = getAvatarBgColor(cleanName);
+
+  const cleanSrc = src && !src.includes('dicebear') && !src.includes('bottts') && !src.includes('robohash') ? src : undefined;
+
   return (
     <div className={`relative inline-block flex-shrink-0 ${className}`}>
       <div
-        className={`${sizeMap[size]} rounded-full overflow-hidden flex items-center justify-center font-bold text-white select-none bg-gradient-to-br from-slate-600 to-slate-700 dark:from-slate-700 dark:to-slate-800 shadow-xs border border-black/10 dark:border-white/10`}
+        className={`${sizeMap[size]} rounded-full overflow-hidden flex items-center justify-center font-bold text-white select-none shadow-xs ${
+          cleanSrc && !imgError ? 'bg-slate-300 dark:bg-[#202c33]' : bgColorClass
+        }`}
       >
-        {src && !imgError ? (
+        {cleanSrc && !imgError ? (
           <img
-            src={src}
-            alt={name || 'Avatar'}
+            src={cleanSrc}
+            alt={cleanName || 'Avatar'}
             onError={() => setImgError(true)}
             className="w-full h-full object-cover"
             loading="lazy"
           />
-        ) : initials ? (
-          <span className="tracking-tight select-none font-semibold">{initials}</span>
         ) : (
-          <User className={`${iconSizeMap[size]} text-slate-300 dark:text-slate-400 stroke-[2]`} />
+          <span className="tracking-tight select-none font-semibold uppercase">{initials}</span>
         )}
       </div>
 

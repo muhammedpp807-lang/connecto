@@ -12,6 +12,7 @@ import {
 } from 'firebase/firestore';
 import { db, isFirebaseConfigured } from '../firebase/config';
 import { UserProfile } from '../types';
+import { safeGetItem, safeSetItem, isFirestoreQuotaExhausted, handleFirestoreError } from './storageEngine';
 
 const LOCAL_USERS_KEY = 'connecto_db_users';
 const LOCAL_USERNAMES_KEY = 'connecto_db_usernames';
@@ -41,16 +42,14 @@ function purgeFakeSeedData(users: UserProfile[]): UserProfile[] {
 
 function getLocalUsers(): UserProfile[] {
   try {
-    const raw = localStorage.getItem(LOCAL_USERS_KEY);
+    const raw = safeGetItem<UserProfile[]>(LOCAL_USERS_KEY);
     if (raw) {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) {
-        const cleaned = purgeFakeSeedData(parsed);
-        if (cleaned.length !== parsed.length) {
-          saveLocalUsers(cleaned);
-        }
-        return cleaned;
+      const parsed = Array.isArray(raw) ? raw : [];
+      const cleaned = purgeFakeSeedData(parsed);
+      if (cleaned.length !== parsed.length) {
+        saveLocalUsers(cleaned);
       }
+      return cleaned;
     }
   } catch (err) {
     console.error('Error reading local users:', err);
@@ -61,7 +60,7 @@ function getLocalUsers(): UserProfile[] {
 function saveLocalUsers(users: UserProfile[]) {
   try {
     const cleaned = purgeFakeSeedData(users);
-    localStorage.setItem(LOCAL_USERS_KEY, JSON.stringify(cleaned));
+    safeSetItem(LOCAL_USERS_KEY, cleaned);
     userChannel?.postMessage({ type: 'USERS_UPDATED' });
   } catch (err) {
     console.error('Error saving local users:', err);
@@ -210,7 +209,7 @@ export const createUserProfile = async (profile: UserProfile): Promise<void> => 
   saveLocalUsers(users);
 
   // Sync to Firestore in the background or with timeout
-  if (isFirebaseConfigured && db) {
+  if (isFirebaseConfigured && db && !isFirestoreQuotaExhausted()) {
     try {
       await withTimeout(
         Promise.all([
@@ -220,6 +219,7 @@ export const createUserProfile = async (profile: UserProfile): Promise<void> => 
         2000
       );
     } catch (err) {
+      handleFirestoreError(err);
       console.warn('Firestore user creation note:', err);
     }
   }
@@ -238,7 +238,7 @@ export const updateUserProfile = async (uid: string, updates: Partial<UserProfil
     saveLocalUsers(users);
   }
 
-  if (isFirebaseConfigured && db) {
+  if (isFirebaseConfigured && db && !isFirestoreQuotaExhausted()) {
     try {
       const userRef = doc(db, 'users', uid);
       await withTimeout(
@@ -249,6 +249,7 @@ export const updateUserProfile = async (uid: string, updates: Partial<UserProfil
         2000
       );
     } catch (err) {
+      handleFirestoreError(err);
       console.warn('Firestore user update note:', err);
     }
   }
@@ -256,7 +257,7 @@ export const updateUserProfile = async (uid: string, updates: Partial<UserProfil
 
 export const setUserOnlineStatus = async (uid: string, isOnline: boolean): Promise<void> => {
   if (!uid || FAKE_UIDS.has(uid)) return;
-  if (isFirebaseConfigured && db) {
+  if (isFirebaseConfigured && db && !isFirestoreQuotaExhausted()) {
     try {
       const userRef = doc(db, 'users', uid);
       await updateDoc(userRef, {
@@ -264,7 +265,8 @@ export const setUserOnlineStatus = async (uid: string, isOnline: boolean): Promi
         lastSeen: Date.now()
       });
       return;
-    } catch {
+    } catch (err) {
+      handleFirestoreError(err);
       // Non-blocking
     }
   }

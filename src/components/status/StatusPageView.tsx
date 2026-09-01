@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Camera, Plus, Trash2, Eye, Sparkles, Check, Play, Image as ImageIcon } from 'lucide-react';
+import { Camera, Plus, Sparkles, Check, Play, Image as ImageIcon } from 'lucide-react';
 import { UserStatusGroup, StatusItem } from '../../types';
 import { useAuth } from '../../contexts/AuthContext';
+import { useTheme } from '../../contexts/ThemeContext';
 import { subscribeToStatuses, deleteStatus } from '../../services/statusService';
 import { Avatar } from '../common/Avatar';
+import { StatusThumbnailCircle } from './StatusThumbnailCircle';
 import { CreateStatusModal } from './CreateStatusModal';
 import { StatusViewerModal } from './StatusViewerModal';
 import { formatTimeAgo } from '../../utils/dateUtils';
@@ -11,6 +13,7 @@ import { useNotifications } from '../../contexts/NotificationContext';
 
 export const StatusPageView: React.FC = () => {
   const { profile } = useAuth();
+  const { colorConfig } = useTheme();
   const { showToast } = useNotifications();
   const [statusGroups, setStatusGroups] = useState<UserStatusGroup[]>([]);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -44,53 +47,55 @@ export const StatusPageView: React.FC = () => {
   };
 
   return (
-    <div className="flex-1 h-full flex flex-col bg-[#0b141a] text-slate-100 overflow-y-auto select-none relative transition-colors">
+    <div className="flex-1 h-full flex flex-col bg-white dark:bg-[#0b141a] text-slate-900 dark:text-slate-100 overflow-y-auto select-none relative transition-colors">
       {/* Top Header */}
-      <div className="px-8 pt-8 pb-4">
-        <h1 className="text-xl font-bold tracking-tight text-white">Status</h1>
+      <div className="px-8 pt-8 pb-4 border-b border-[#e9edef] dark:border-[#1f2c34] bg-[#f0f2f5] dark:bg-[#111b21]">
+        <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">Status</h1>
+        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Share photos, videos and updates with your contacts</p>
       </div>
 
       {/* Main Status Content Area */}
-      <div className="px-8 py-2 max-w-4xl space-y-8">
+      <div className="px-8 py-6 max-w-4xl space-y-8 pb-24">
         {/* Section 1: My Status */}
         <div className="space-y-3">
-          <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
             My Status
           </h2>
 
           <div
             onClick={handleOpenMyStatus}
-            className="flex items-center gap-4 p-3 rounded-2xl bg-[#111b21]/80 hover:bg-[#1f2c34] border border-[#1f2c34] transition-colors cursor-pointer group max-w-md"
+            className="flex items-center gap-4 p-3 rounded-2xl bg-[#f0f2f5] dark:bg-[#111b21] hover:bg-slate-200/70 dark:hover:bg-[#1f2c34] border border-slate-200 dark:border-[#1f2c34] transition-colors cursor-pointer group max-w-md shadow-xs"
           >
-            {/* Avatar with Ring & Plus badge */}
+            {/* Avatar / Status Thumbnail with Ring & Plus badge */}
             <div className="relative flex-shrink-0">
               <div
+                style={
+                  myGroup && myGroup.statuses.length > 0
+                    ? { borderColor: colorConfig.primaryHex }
+                    : undefined
+                }
                 className={`w-12 h-12 rounded-full p-0.5 flex items-center justify-center ${
                   myGroup && myGroup.statuses.length > 0
-                    ? 'ring-2 ring-[#00a884] ring-offset-2 ring-offset-[#111b21]'
-                    : 'border border-dashed border-slate-500'
+                    ? 'border-2'
+                    : 'border border-dashed border-slate-400 dark:border-slate-600'
                 }`}
               >
-                {profile?.photoURL ? (
-                  <img
-                    src={profile.photoURL}
-                    alt={profile.displayName}
-                    className="w-full h-full rounded-full object-cover"
-                  />
-                ) : (
-                  <div className="w-full h-full rounded-full bg-[#202c33] flex items-center justify-center text-slate-300 font-bold text-lg">
-                    ?
-                  </div>
-                )}
+                <StatusThumbnailCircle
+                  status={myGroup && myGroup.statuses.length > 0 ? myGroup.statuses[myGroup.statuses.length - 1] : null}
+                  userAvatar={profile?.photoURL}
+                  userName={profile?.displayName || 'My Profile'}
+                  size="md"
+                />
               </div>
 
-              {/* Green '+' button badge */}
+              {/* Theme colored '+' button badge */}
               <div
                 onClick={(e) => {
                   e.stopPropagation();
                   setShowCreateModal(true);
                 }}
-                className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-[#00a884] text-white flex items-center justify-center shadow border-2 border-[#111b21] group-hover:scale-110 transition cursor-pointer"
+                style={{ backgroundColor: colorConfig.primaryHex }}
+                className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full text-white flex items-center justify-center shadow-md border-2 border-white dark:border-[#111b21] group-hover:scale-110 transition cursor-pointer"
                 title="Add new status"
               >
                 <Plus className="w-3.5 h-3.5 stroke-[3]" />
@@ -100,16 +105,19 @@ export const StatusPageView: React.FC = () => {
             {/* Info */}
             <div className="flex-1 min-w-0">
               <div className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-white truncate">
+                <h3 className="text-sm font-semibold text-slate-900 dark:text-white truncate">
                   My Status
                 </h3>
                 {myGroup && myGroup.statuses.length > 0 && (
-                  <span className="text-[11px] text-[#00a884] font-medium">
+                  <span 
+                    style={{ color: colorConfig.primaryHex }}
+                    className="text-[11px] font-bold"
+                  >
                     {myGroup.statuses.length} active
                   </span>
                 )}
               </div>
-              <p className="text-xs text-slate-400 truncate mt-0.5">
+              <p className="text-xs text-slate-500 dark:text-slate-400 truncate mt-0.5">
                 {myGroup && myGroup.statuses.length > 0
                   ? `Last updated ${formatTimeAgo(myGroup.statuses[myGroup.statuses.length - 1].createdAt)}`
                   : 'Tap to add status update'}
@@ -120,17 +128,18 @@ export const StatusPageView: React.FC = () => {
 
         {/* Section 2: Recent Updates */}
         <div className="space-y-4">
-          <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
             Recent Updates
           </h2>
 
           {friendGroups.length === 0 ? (
-            <div className="py-20 flex flex-col items-center justify-center text-center space-y-2">
-              <p className="text-base font-medium text-slate-300">
-                No friend statuses yet
+            <div className="py-16 flex flex-col items-center justify-center text-center space-y-2 border border-dashed border-slate-200 dark:border-[#1f2c34] rounded-2xl bg-[#f0f2f5]/40 dark:bg-[#111b21]/40">
+              <Sparkles className="w-8 h-8 text-slate-400 dark:text-slate-500 stroke-[1.5]" />
+              <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+                No contact status updates yet
               </p>
-              <p className="text-xs text-slate-500">
-                Friends' status updates will appear here
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Statuses posted by contacts and participants will appear here
               </p>
             </div>
           ) : (
@@ -141,22 +150,26 @@ export const StatusPageView: React.FC = () => {
                   <div
                     key={group.userId}
                     onClick={() => handleOpenFriendStatus(group.userId)}
-                    className="flex items-center gap-3.5 p-3 rounded-2xl bg-[#111b21] hover:bg-[#1f2c34] border border-[#1f2c34] transition-colors cursor-pointer"
+                    className="flex items-center gap-3.5 p-3 rounded-2xl bg-[#f0f2f5] dark:bg-[#111b21] hover:bg-slate-200/70 dark:hover:bg-[#1f2c34] border border-slate-200 dark:border-[#1f2c34] transition-colors cursor-pointer shadow-xs"
                   >
                     <div className="relative flex-shrink-0">
-                      <div className="w-12 h-12 rounded-full p-0.5 ring-2 ring-[#00a884] ring-offset-2 ring-offset-[#111b21]">
-                        <Avatar
-                          src={group.userAvatar}
-                          name={group.userName}
+                      <div 
+                        style={{ borderColor: colorConfig.primaryHex }}
+                        className="w-12 h-12 rounded-full p-0.5 border-2"
+                      >
+                        <StatusThumbnailCircle
+                          status={latest}
+                          userAvatar={group.userAvatar}
+                          userName={group.userName}
                           size="md"
                         />
                       </div>
                     </div>
                     <div className="flex-1 min-w-0">
-                      <h3 className="text-sm font-semibold text-white truncate">
+                      <h3 className="text-sm font-semibold text-slate-900 dark:text-white truncate">
                         {group.userName}
                       </h3>
-                      <p className="text-xs text-slate-400 truncate mt-0.5">
+                      <p className="text-xs text-slate-500 dark:text-slate-400 truncate mt-0.5">
                         {latest ? formatTimeAgo(latest.createdAt) : 'Recently'}
                       </p>
                     </div>
@@ -173,7 +186,8 @@ export const StatusPageView: React.FC = () => {
         type="button"
         id="status-camera-fab"
         onClick={() => setShowCreateModal(true)}
-        className="fixed bottom-8 right-8 w-14 h-14 rounded-full bg-[#00a884] hover:bg-[#02906f] active:scale-95 text-white flex items-center justify-center shadow-2xl shadow-[#00a884]/30 transition-transform duration-200 z-20 cursor-pointer"
+        style={{ backgroundColor: colorConfig.primaryHex }}
+        className="fixed bottom-8 right-8 w-14 h-14 rounded-full text-white flex items-center justify-center shadow-2xl transition-transform duration-200 z-20 cursor-pointer active:scale-95 hover:scale-105"
         title="Add status update"
         aria-label="Create status"
       >

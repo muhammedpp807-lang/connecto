@@ -20,6 +20,7 @@ import {
 import { sendMessage, setTypingStatus } from '../../services/chatService';
 import { uploadMediaFile } from '../../services/storageService';
 import { compressImageFile } from '../../utils/imageUtils';
+import { MessageReplyTarget } from '../../types';
 import { EmojiPickerModal } from './EmojiPickerModal';
 import { MediaEditorModal } from './MediaEditorModal';
 import { VoicePermissionModal } from './VoicePermissionModal';
@@ -35,6 +36,9 @@ interface MessageComposerProps {
   senderName?: string;
   senderAvatar?: string;
   isGroup?: boolean;
+  replyingTo?: MessageReplyTarget | null;
+  onCancelReply?: () => void;
+  onOpenStickers?: () => void;
 }
 
 interface ActiveMediaToEdit {
@@ -50,7 +54,10 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
   receiverId,
   senderName,
   senderAvatar,
-  isGroup
+  isGroup,
+  replyingTo,
+  onCancelReply,
+  onOpenStickers
 }) => {
   const { profile } = useAuth();
   const { showToast, settings } = useNotifications();
@@ -178,10 +185,12 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
         fileName: metadata.fileName,
         fileSize: metadata.size,
         videoDuration: metadata.duration,
+        replyTo: replyingTo || undefined,
         senderName,
         senderAvatar
       });
 
+      onCancelReply?.();
       if (settings.sounds) playSentSound();
       showToast('success', `${mediaType === 'image' ? 'Image' : 'Video'} sent!`);
     } catch (err) {
@@ -224,13 +233,16 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
     const clean = text.trim();
     if (!clean) return;
 
+    const currentReply = replyingTo ? { ...replyingTo } : undefined;
     setText('');
+    onCancelReply?.();
     setTypingStatus(conversationId, senderId, false);
 
     try {
       await sendMessage(conversationId, senderId, receiverId, {
         text: clean,
         type: 'text',
+        replyTo: currentReply,
         senderName,
         senderAvatar
       });
@@ -531,10 +543,12 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
           fileSize: syntheticBlob.size,
           audioDuration: finalDuration,
           audioWaveform: downsampledWaveform,
+          replyTo: replyingTo || undefined,
           senderName,
           senderAvatar
         });
 
+        onCancelReply?.();
         if (settings.sounds) playSentSound();
         showToast('success', 'Voice note sent!');
       } catch (err) {
@@ -575,10 +589,12 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
           fileSize: audioBlob.size,
           audioDuration: finalDuration,
           audioWaveform: downsampledWaveform,
+          replyTo: replyingTo || undefined,
           senderName,
           senderAvatar
         });
 
+        onCancelReply?.();
         if (settings.sounds) playSentSound();
         showToast('success', 'Voice note sent!');
       } catch (err) {
@@ -644,6 +660,35 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
         onRequestPermission={handleRequestVoicePermission}
         onStartSimulatedVoice={startSimulatedVoiceRecording}
       />
+
+      {/* Replying To Quote Bar */}
+      {replyingTo && (
+        <div className="mb-2 p-2.5 rounded-xl bg-slate-100 dark:bg-[#161b22] border-l-4 border-emerald-500 flex items-center justify-between gap-3 text-xs animate-in slide-in-from-bottom-2 shadow-xs">
+          <div className="flex-1 min-w-0">
+            <p className="font-bold text-emerald-600 dark:text-emerald-400 text-xs truncate">
+              Replying to {replyingTo.senderName || 'Message'}
+            </p>
+            <p className="text-slate-600 dark:text-slate-300 text-[11px] truncate mt-0.5">
+              {replyingTo.text ||
+                (replyingTo.type === 'image'
+                  ? '📷 Photo'
+                  : replyingTo.type === 'video'
+                  ? '🎥 Video'
+                  : replyingTo.type === 'sticker'
+                  ? '🎨 Sticker'
+                  : 'Attachment')}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onCancelReply}
+            className="p-1 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition cursor-pointer"
+            title="Cancel reply"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       {/* Voice Recording Mode (WhatsApp / Instagram realistic layout) */}
       {isRecording ? (
@@ -813,7 +858,11 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
                     type="button"
                     onClick={() => {
                       setShowAttachmentMenu(false);
-                      setShowEmoji(true);
+                      if (onOpenStickers) {
+                        onOpenStickers();
+                      } else {
+                        setShowEmoji(true);
+                      }
                     }}
                     className="flex flex-col items-center justify-center p-2.5 rounded-xl hover:bg-slate-50 dark:hover:bg-[#0d1117] transition cursor-pointer group"
                   >

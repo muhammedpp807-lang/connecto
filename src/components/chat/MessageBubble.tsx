@@ -1,5 +1,17 @@
-import React, { useState } from 'react';
-import { Check, CheckCheck, FileText, Download, Smile, Trash2, Play, Ban, Film } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import {
+  Check,
+  CheckCheck,
+  FileText,
+  Download,
+  Smile,
+  Trash2,
+  Ban,
+  MoreVertical,
+  Reply,
+  Sparkles,
+  Copy
+} from 'lucide-react';
 import { Message } from '../../types';
 import { formatTime, formatFileSize } from '../../utils/dateUtils';
 import { addMessageReaction, deleteMessageForEveryone, deleteMessageForMe } from '../../services/chatService';
@@ -14,12 +26,15 @@ interface MessageBubbleProps {
   isGroup?: boolean;
   currentUserId: string;
   onImageClick?: (url: string) => void;
+  onReply?: (message: Message) => void;
+  onReplySticker?: (message: Message) => void;
+  onDeleteMessageLocally?: (messageId: string) => void;
 }
 
-const QUICK_REACTIONS = ['👍', '❤️', '😂', '🔥', '🎉'];
+const QUICK_REACTIONS = ['👍', '❤️', '😂', '🔥', '🎉', '🙏'];
 
 // Deterministic color mapping for sender names in group chats
-const SENDER_COLORS = [
+const SENDER_COLORS萃 = [
   'text-emerald-500 dark:text-emerald-400',
   'text-amber-500 dark:text-amber-400',
   'text-indigo-500 dark:text-indigo-400',
@@ -31,13 +46,13 @@ const SENDER_COLORS = [
 ];
 
 function getSenderColor(name?: string): string {
-  if (!name) return SENDER_COLORS[0];
+  if (!name) return SENDER_COLORS萃[0];
   let hash = 0;
   for (let i = 0; i < name.length; i++) {
     hash = name.charCodeAt(i) + ((hash << 5) - hash);
   }
-  const idx = Math.abs(hash) % SENDER_COLORS.length;
-  return SENDER_COLORS[idx];
+  const idx不易 = Math.abs(hash) % SENDER_COLORS萃.length;
+  return SENDER_COLORS萃[idx不易];
 }
 
 export const MessageBubble: React.FC<MessageBubbleProps> = ({
@@ -45,12 +60,32 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   isMe,
   isGroup,
   currentUserId,
-  onImageClick
+  onImageClick,
+  onReply,
+  onReplySticker,
+  onDeleteMessageLocally
 }) => {
   const [showReactionPicker, setShowReactionPicker] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
   const { showToast } = useNotifications();
   const { bubbleSettings, colorConfig } = useTheme();
+
+  // Close menu when clicked outside
+  useEffect(() => {
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setShowMenu(false);
+      }
+    };
+    if (showMenu) {
+      document.addEventListener('mousedown', handleOutsideClick);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick);
+    };
+  }, [showMenu]);
 
   // If deleted for current user only, hide completely
   if (message.deletedForUsers && message.deletedForUsers.includes(currentUserId)) {
@@ -75,6 +110,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
 
   const handleDeleteForEveryone = async () => {
     try {
+      onDeleteMessageLocally?.(message.id);
       await deleteMessageForEveryone(message.conversationId, message.id);
       setShowDeleteModal(false);
       showToast('info', 'Message deleted for everyone');
@@ -85,6 +121,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
 
   const handleDeleteForMe = async () => {
     try {
+      onDeleteMessageLocally?.(message.id);
       await deleteMessageForMe(message.conversationId, message.id, currentUserId);
       setShowDeleteModal(false);
       showToast('info', 'Message deleted for you');
@@ -93,13 +130,21 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
     }
   };
 
+  const handleCopy = () => {
+    if (message.text) {
+      navigator.clipboard.writeText(message.text);
+      showToast('success', 'Copied text to clipboard');
+    }
+    setShowMenu(false);
+  };
+
   const senderColor = getSenderColor(message.senderName);
 
   // Compute bubble corner radius class
   const getRadiusClass = () => {
     switch (bubbleSettings.radius) {
       case 'sharp':
-        return isMe ? 'rounded-none' : 'rounded-none';
+        return 'rounded-none';
       case 'subtle':
         return isMe ? 'rounded-lg rounded-tr-none' : 'rounded-lg rounded-tl-none';
       case 'extra-round':
@@ -131,7 +176,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   const getOutgoingColorClass = () => {
     switch (bubbleSettings.colorScheme) {
       case 'emerald':
-        return 'bg-emerald-600 dark:bg-emerald-600 text-white shadow-emerald-950/20';
+        return 'bg-[#008069] dark:bg-[#005c4b] text-white shadow-emerald-950/20';
       case 'blue':
         return 'bg-blue-600 dark:bg-blue-600 text-white shadow-blue-950/20';
       case 'purple':
@@ -167,7 +212,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
         <div
           className={`flex items-center gap-2 px-3.5 py-2 rounded-2xl text-xs italic ${
             isMe
-              ? 'bg-blue-600/20 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 border border-blue-300/40 dark:border-blue-800/40 rounded-tr-none'
+              ? 'bg-emerald-600/20 dark:bg-emerald-900/30 text-emerald-900 dark:text-emerald-200 border border-emerald-300/40 dark:border-emerald-800/40 rounded-tr-none'
               : 'bg-slate-100 dark:bg-[#161b22]/70 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-[#1e2530] rounded-tl-none'
           }`}
         >
@@ -186,7 +231,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
       className={`group relative flex flex-col ${isMe ? 'items-end' : 'items-start'} ${bubbleSettings.densePadding ? 'my-0.5' : 'my-1.5'} px-2`}
       id={`msg-bubble-${message.id}`}
     >
-      {/* Quick Reaction Bar (on hover/action) */}
+      {/* Quick Reaction Bar */}
       {showReactionPicker && (
         <div
           className={`absolute -top-9 ${isMe ? 'right-2' : 'left-2'} z-30 flex items-center gap-1 bg-white dark:bg-[#161b22] border border-slate-200 dark:border-[#1e2530] px-2 py-1 rounded-full shadow-xl animate-in fade-in zoom-in-95`}
@@ -215,17 +260,110 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
         />
       )}
 
-      {/* Bubble Container */}
+      {/* Bubble Container - Sleek Medium Size */}
       <div
         style={opacityStyle}
-        className={`relative max-w-[85%] sm:max-w-md ${
-          bubbleSettings.densePadding ? 'px-3 py-1.5' : 'px-4 py-2.5'
-        } ${bubbleRadiusClass} shadow-xs transition-all duration-150 ${
+        className={`relative w-fit max-w-[85%] sm:max-w-[340px] md:max-w-[420px] min-w-[100px] break-words [overflow-wrap:anywhere] ${
+          bubbleSettings.densePadding ? 'px-3 py-1.5' : 'px-3.5 py-2'
+        } ${bubbleRadiusClass} pr-7 sm:pr-8 shadow-xs transition-all duration-150 ${
           isMe
             ? `${outgoingColorClass} shadow-md`
             : 'bg-white dark:bg-[#161b22] text-slate-800 dark:text-slate-200 border border-slate-200/80 dark:border-[#1e2530] shadow-xs'
         }`}
       >
+        {/* Top Right Three-Dots Dropdown Trigger */}
+        <div className="absolute top-1.5 right-1.5 z-20" ref={menuRef}>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowMenu(!showMenu);
+            }}
+            className={`p-1 rounded-full transition cursor-pointer opacity-70 hover:opacity-100 ${
+              isMe
+                ? 'text-white hover:bg-black/20'
+                : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-[#1e2530]'
+            }`}
+            title="Message options"
+            aria-label="Message options"
+          >
+            <MoreVertical className="w-3.5 h-3.5" />
+          </button>
+
+          {/* Dropdown Menu Modal/Popover */}
+          {showMenu && (
+            <div
+              className={`absolute top-full mt-1 ${isMe ? 'right-0' : 'left-0'} z-50 w-44 bg-white dark:bg-[#161b22] border border-slate-200 dark:border-[#1e2530] rounded-2xl shadow-2xl py-1 text-xs animate-in fade-in zoom-in-95 backdrop-blur-md`}
+            >
+              {/* 1. Reply */}
+              <button
+                type="button"
+                onClick={() => {
+                  setShowMenu(false);
+                  onReply?.(message);
+                }}
+                className="w-full px-3 py-2 text-left flex items-center gap-2 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-[#1e2530] transition cursor-pointer font-medium"
+              >
+                <Reply className="w-3.5 h-3.5 text-emerald-500" />
+                <span>Reply</span>
+              </button>
+
+              {/* 2. Reply with Sticker */}
+              <button
+                type="button"
+                onClick={() => {
+                  setShowMenu(false);
+                  onReplySticker?.(message);
+                }}
+                className="w-full px-3 py-2 text-left flex items-center gap-2 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-[#1e2530] transition cursor-pointer font-medium"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-purple-500" />
+                <span>Reply with Sticker</span>
+              </button>
+
+              {/* 3. React with Emoji */}
+              <button
+                type="button"
+                onClick={() => {
+                  setShowMenu(false);
+                  setShowReactionPicker(true);
+                }}
+                className="w-full px-3 py-2 text-left flex items-center gap-2 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-[#1e2530] transition cursor-pointer font-medium"
+              >
+                <Smile className="w-3.5 h-3.5 text-amber-500" />
+                <span>React</span>
+              </button>
+
+              {/* 4. Copy Text (if text exists) */}
+              {message.text && (
+                <button
+                  type="button"
+                  onClick={handleCopy}
+                  className="w-full px-3 py-2 text-left flex items-center gap-2 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-[#1e2530] transition cursor-pointer font-medium"
+                >
+                  <Copy className="w-3.5 h-3.5 text-blue-500" />
+                  <span>Copy Text</span>
+                </button>
+              )}
+
+              <div className="h-px bg-slate-100 dark:bg-[#1e2530] my-1" />
+
+              {/* 5. Delete Message */}
+              <button
+                type="button"
+                onClick={() => {
+                  setShowMenu(false);
+                  setShowDeleteModal(true);
+                }}
+                className="w-full px-3 py-2 text-left flex items-center gap-2 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition cursor-pointer font-medium"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Delete</span>
+              </button>
+            </div>
+          )}
+        </div>
+
         {/* In group chats, display sender name for incoming messages */}
         {isGroup && !isMe && message.senderName && (
           <p className={`text-[11px] font-bold mb-1 tracking-tight ${senderColor}`}>
@@ -233,30 +371,39 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
           </p>
         )}
 
-        {/* Hover Actions: Reaction & Delete Trigger Buttons */}
-        <div
-          className={`absolute -top-3 ${
-            isMe ? '-left-14' : '-right-14'
-          } opacity-0 group-hover:opacity-100 flex items-center gap-1 transition-opacity z-10`}
-        >
-          <button
-            onClick={() => setShowReactionPicker(!showReactionPicker)}
-            className="p-1 rounded-full bg-white dark:bg-[#161b22] border border-slate-200 dark:border-[#1e2530] text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition shadow-xs cursor-pointer"
-            aria-label="Add reaction"
-            title="React"
+        {/* Sleek WhatsApp-style Quote Block (Image 7) */}
+        {message.replyTo && (
+          <div
+            className={`mb-1.5 px-2.5 py-1 rounded-md border-l-2 text-xs select-none ${
+              isMe
+                ? 'bg-black/25 border-emerald-300 text-white/90'
+                : 'bg-slate-100/90 dark:bg-black/35 border-emerald-500 text-slate-800 dark:text-slate-200'
+            }`}
           >
-            <Smile className="w-3.5 h-3.5" />
-          </button>
+            <p className={`font-semibold text-[11px] truncate ${isMe ? 'text-emerald-200' : 'text-emerald-600 dark:text-emerald-400'}`}>
+              {message.replyTo.senderName || 'Message'}
+            </p>
+            <p className="text-[11px] opacity-80 truncate line-clamp-1 max-w-[260px]">
+              {message.replyTo.text ||
+                (message.replyTo.type === 'image'
+                  ? '📷 Photo'
+                  : message.replyTo.type === 'video'
+                  ? '🎥 Video'
+                  : message.replyTo.type === 'sticker'
+                  ? '🎨 Sticker'
+                  : 'Attachment')}
+            </p>
+          </div>
+        )}
 
-          <button
-            onClick={() => setShowDeleteModal(true)}
-            className="p-1 rounded-full bg-white dark:bg-[#161b22] border border-slate-200 dark:border-[#1e2530] text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 transition shadow-xs cursor-pointer"
-            aria-label="Delete message"
-            title={isMe ? 'Delete message (for everyone or me)' : 'Delete message (for me)'}
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
-        </div>
+        {/* Sticker Message Layout */}
+        {message.type === 'sticker' && (
+          <div className="my-1 py-1 flex items-center justify-center select-none">
+            <span className="text-5xl sm:text-6xl transform hover:scale-110 transition duration-150 filter drop-shadow-md cursor-pointer">
+              {message.text || '✨'}
+            </span>
+          </div>
+        )}
 
         {/* Image Content */}
         {message.type === 'image' && message.fileUrl && (
@@ -294,8 +441,8 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
           />
         )}
 
-        {/* Text Content (or image/video caption) */}
-        {message.text && (
+        {/* Text Content (or caption) */}
+        {message.type !== 'sticker' && message.text && (
           <p className={`${fontSizeClass} whitespace-pre-wrap break-words`}>
             {message.text}
           </p>
@@ -310,7 +457,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                 : 'bg-slate-50 dark:bg-[#0d1117] border-slate-200 dark:border-[#1e2530]'
             }`}
           >
-            <div className={`p-2 rounded-lg ${isMe ? 'bg-white/20' : 'bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400'}`}>
+            <div className={`p-2 rounded-lg ${isMe ? 'bg-white/20' : 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400'}`}>
               <FileText className="w-5 h-5" />
             </div>
             <div className="flex-1 min-w-0">
@@ -345,7 +492,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
           {isMe && (
             <span className="flex items-center" title={message.read ? "Read" : message.delivered ? "Delivered" : "Sent"}>
               {message.read ? (
-                <CheckCheck className="w-3.5 h-3.5 text-cyan-200" />
+                <CheckCheck className="w-3.5 h-3.5 text-emerald-200" />
               ) : message.delivered ? (
                 <CheckCheck className="w-3.5 h-3.5 text-white/90" />
               ) : (
@@ -356,27 +503,28 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
         </div>
       </div>
 
-      {/* Message Reactions Badges */}
+      {/* Message Reactions Badges (Image 4) */}
       {message.reactions && Object.keys(message.reactions).length > 0 && (
-        <div className="flex items-center gap-1 mt-1 -mb-1 px-1">
+        <div className={`flex flex-wrap items-center gap-1.5 mt-0.5 px-1 ${isMe ? 'justify-end' : 'justify-start'}`}>
           {Object.entries(
             Object.values(message.reactions as Record<string, string>).reduce((acc: Record<string, number>, emoji: string) => {
               acc[emoji] = (acc[emoji] || 0) + 1;
               return acc;
             }, {} as Record<string, number>)
           ).map(([emoji, count]) => (
-            <span
+            <button
               key={emoji}
-              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-white dark:bg-[#161b22] border border-slate-200 dark:border-[#1e2530] text-slate-700 dark:text-slate-300 shadow-xs"
+              type="button"
+              onClick={() => handleReaction(emoji)}
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-slate-900/90 dark:bg-[#161f2e] border border-slate-700/60 dark:border-[#2d3a4f] text-slate-200 shadow-md hover:scale-105 transition cursor-pointer select-none"
+              title={`Reacted with ${emoji}`}
             >
-              <span>{emoji}</span>
-              {count > 1 && <span className="text-[10px] font-bold text-slate-500">{count}</span>}
-            </span>
+              <span className="text-sm leading-none">{emoji}</span>
+              <span className="text-[11px] font-semibold text-slate-300">{count}</span>
+            </button>
           ))}
         </div>
       )}
     </div>
   );
 };
-
-

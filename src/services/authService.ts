@@ -15,6 +15,7 @@ import {
   setUserOnlineStatus, 
   updateUserProfile 
 } from './userService';
+import { safeGetItem, safeSetItem, safeRemoveItem } from './storageEngine';
 
 const CURRENT_USER_SESSION_KEY = 'connecto_session_user';
 const CREDENTIALS_KEY = 'connecto_db_credentials';
@@ -41,8 +42,8 @@ export interface LoginParams {
 
 function getCredentials(): Record<string, string> {
   try {
-    const raw = localStorage.getItem(CREDENTIALS_KEY);
-    if (raw) return JSON.parse(raw);
+    const raw = safeGetItem<Record<string, string>>(CREDENTIALS_KEY);
+    if (raw && typeof raw === 'object') return raw;
   } catch {
     return {};
   }
@@ -53,7 +54,7 @@ function saveCredential(identifier: string, pass: string) {
   try {
     const creds = getCredentials();
     creds[identifier.toLowerCase().trim()] = pass;
-    localStorage.setItem(CREDENTIALS_KEY, JSON.stringify(creds));
+    safeSetItem(CREDENTIALS_KEY, creds);
   } catch (err) {
     console.error('Error saving credential:', err);
   }
@@ -102,7 +103,7 @@ export const registerUser = async (params: RegisterParams): Promise<UserProfile>
     email: cleanEmail,
     displayName: displayName.trim(),
     username: cleanUser,
-    photoURL: `https://api.dicebear.com/7.x/bottts/svg?seed=${cleanUser}`,
+    photoURL: '',
     about: 'Hey there! I am using Connecto.',
     isOnline: true,
     lastSeen: Date.now(),
@@ -115,7 +116,7 @@ export const registerUser = async (params: RegisterParams): Promise<UserProfile>
   saveCredential(cleanUser, password);
   saveCredential(cleanEmail, password);
 
-  localStorage.setItem(CURRENT_USER_SESSION_KEY, JSON.stringify(newProfile));
+  safeSetItem(CURRENT_USER_SESSION_KEY, newProfile);
   return newProfile;
 };
 
@@ -142,7 +143,7 @@ export const loginUser = async (params: LoginParams): Promise<UserProfile> => {
         email: 'connecto@connecto.app',
         displayName: 'Connecto Admin',
         username: 'connecto',
-        photoURL: 'https://api.dicebear.com/7.x/bottts/svg?seed=connecto-admin',
+        photoURL: '',
         about: 'Official Connecto Platform Administrator',
         isOnline: true,
         lastSeen: Date.now(),
@@ -160,7 +161,7 @@ export const loginUser = async (params: LoginParams): Promise<UserProfile> => {
       await updateUserProfile(adminProfile.uid, { role: 'admin', isOnline: true });
     }
 
-    localStorage.setItem(CURRENT_USER_SESSION_KEY, JSON.stringify(adminProfile));
+    safeSetItem(CURRENT_USER_SESSION_KEY, adminProfile);
     return adminProfile;
   }
 
@@ -187,7 +188,7 @@ export const loginUser = async (params: LoginParams): Promise<UserProfile> => {
         saveCredential(profile.email, password);
         setUserOnlineStatus(profile.uid, true).catch(() => {});
         profile.isOnline = true;
-        localStorage.setItem(CURRENT_USER_SESSION_KEY, JSON.stringify(profile));
+        safeSetItem(CURRENT_USER_SESSION_KEY, profile);
         return profile;
       } catch (err: unknown) {
         const fbErr = err as { code?: string; message?: string };
@@ -202,7 +203,7 @@ export const loginUser = async (params: LoginParams): Promise<UserProfile> => {
             saveCredential(profile.email, password);
             setUserOnlineStatus(profile.uid, true).catch(() => {});
             profile.isOnline = true;
-            localStorage.setItem(CURRENT_USER_SESSION_KEY, JSON.stringify(profile));
+            safeSetItem(CURRENT_USER_SESSION_KEY, profile);
             return profile;
           }
           throw new Error('Incorrect password. Please check your password and try again.');
@@ -221,7 +222,7 @@ export const loginUser = async (params: LoginParams): Promise<UserProfile> => {
       }
       setUserOnlineStatus(profile.uid, true).catch(() => {});
       profile.isOnline = true;
-      localStorage.setItem(CURRENT_USER_SESSION_KEY, JSON.stringify(profile));
+      safeSetItem(CURRENT_USER_SESSION_KEY, profile);
       return profile;
     }
 
@@ -230,7 +231,7 @@ export const loginUser = async (params: LoginParams): Promise<UserProfile> => {
     if (profile.email) saveCredential(profile.email, password);
     setUserOnlineStatus(profile.uid, true).catch(() => {});
     profile.isOnline = true;
-    localStorage.setItem(CURRENT_USER_SESSION_KEY, JSON.stringify(profile));
+    safeSetItem(CURRENT_USER_SESSION_KEY, profile);
     return profile;
   }
 
@@ -249,7 +250,7 @@ export const loginUser = async (params: LoginParams): Promise<UserProfile> => {
           email: cleanInput,
           displayName: userCredential.user.displayName || autoUsername,
           username: autoUsername,
-          photoURL: userCredential.user.photoURL || `https://api.dicebear.com/7.x/bottts/svg?seed=${autoUsername}`,
+          photoURL: userCredential.user.photoURL || '',
           about: 'Hey there! I am using Connecto.',
           isOnline: true,
           lastSeen: Date.now(),
@@ -261,7 +262,7 @@ export const loginUser = async (params: LoginParams): Promise<UserProfile> => {
       }
       saveCredential(newProfile.username, password);
       saveCredential(cleanInput, password);
-      localStorage.setItem(CURRENT_USER_SESSION_KEY, JSON.stringify(newProfile));
+      safeSetItem(CURRENT_USER_SESSION_KEY, newProfile);
       return newProfile;
     } catch (err: unknown) {
       const fbErr = err as { code?: string };
@@ -275,7 +276,7 @@ export const loginUser = async (params: LoginParams): Promise<UserProfile> => {
 };
 
 export const logoutUser = async (uid?: string): Promise<void> => {
-  localStorage.removeItem(CURRENT_USER_SESSION_KEY);
+  safeRemoveItem(CURRENT_USER_SESSION_KEY);
   if (uid && !FAKE_UIDS.has(uid)) {
     setUserOnlineStatus(uid, false).catch(() => {});
   }
@@ -298,14 +299,15 @@ export const requestPasswordReset = async (email: string): Promise<void> => {
 
 export const getSavedSessionUser = (): UserProfile | null => {
   try {
-    const raw = localStorage.getItem(CURRENT_USER_SESSION_KEY);
-    if (raw) {
-      const user: UserProfile = JSON.parse(raw);
-      if (user && user.uid && !FAKE_UIDS.has(user.uid) && !user.uid.startsWith('seed_') && user.username !== 'connectobot') {
-        return user;
+    const user = safeGetItem<UserProfile>(CURRENT_USER_SESSION_KEY);
+    if (user && user.uid && !FAKE_UIDS.has(user.uid) && !user.uid.startsWith('seed_') && user.username !== 'connectobot') {
+      if (user.photoURL && (user.photoURL.includes('dicebear') || user.photoURL.includes('bottts') || user.photoURL.includes('robohash'))) {
+        user.photoURL = '';
+        safeSetItem(CURRENT_USER_SESSION_KEY, user);
       }
-      localStorage.removeItem(CURRENT_USER_SESSION_KEY);
+      return user;
     }
+    safeRemoveItem(CURRENT_USER_SESSION_KEY);
   } catch {
     return null;
   }

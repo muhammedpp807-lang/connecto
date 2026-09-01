@@ -18,7 +18,16 @@ export interface UserProfile {
   updatedAt: number;
 }
 
-export type MessageType = 'text' | 'image' | 'video' | 'file' | 'voice' | 'audio' | 'system';
+export type MessageType = 'text' | 'image' | 'video' | 'file' | 'voice' | 'audio' | 'sticker' | 'system';
+
+export interface MessageReplyTarget {
+  id: string;
+  senderName?: string;
+  text?: string;
+  type?: MessageType;
+  fileUrl?: string;
+  stickerEmoji?: string;
+}
 
 export interface MessageReaction {
   emoji: string;
@@ -40,6 +49,7 @@ export interface Message {
   videoDuration?: number;
   audioDuration?: number;
   audioWaveform?: number[];
+  replyTo?: MessageReplyTarget;
   delivered: boolean;
   read: boolean;
   createdAt: number;
@@ -108,6 +118,7 @@ export interface StatusItem {
   userUsername?: string;
   type: 'video' | 'image' | 'text';
   mediaUrl?: string;
+  thumbnailUrl?: string;
   caption?: string;
   filter?: 'normal' | 'warm' | 'monochrome' | 'vivid' | 'cyber' | 'sunset';
   textBackground?: string;

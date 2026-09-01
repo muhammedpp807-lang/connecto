@@ -58,10 +58,10 @@ export const ProfilePage: React.FC = () => {
     }
   };
 
-  const handleRandomizeAvatar = async () => {
-    const randomSeed = Math.random().toString(36).substring(2, 8);
-    const newAvatar = `https://api.dicebear.com/7.x/bottts/svg?seed=${randomSeed}`;
-    setPhotoURL(newAvatar);
+  const handleRemovePhoto = async () => {
+    setPhotoURL('');
+    await updateProfileData({ photoURL: '' });
+    showToast('info', 'Profile photo removed');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -150,17 +150,19 @@ export const ProfilePage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className="px-3.5 py-1.5 rounded-xl border border-slate-200 dark:border-[#1e2530] text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-[#0d1117] transition cursor-pointer"
+                className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-xs font-semibold text-white transition cursor-pointer"
               >
                 Upload Photo
               </button>
-              <button
-                type="button"
-                onClick={handleRandomizeAvatar}
-                className="px-3.5 py-1.5 rounded-xl border border-slate-200 dark:border-[#1e2530] text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-[#0d1117] transition flex items-center gap-1 cursor-pointer"
-              >
-                <Shuffle className="w-3.5 h-3.5 text-blue-500" /> Randomize
-              </button>
+              {photoURL && (
+                <button
+                  type="button"
+                  onClick={handleRemovePhoto}
+                  className="px-3.5 py-1.5 rounded-xl border border-slate-200 dark:border-[#1e2530] text-xs font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition cursor-pointer"
+                >
+                  Remove Photo
+                </button>
+              )}
             </div>
           </div>
 

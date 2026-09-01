@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { 
@@ -140,6 +140,24 @@ export const SettingsPage: React.FC = () => {
   // Custom Wallpaper Inputs
   const [inputAppWallpaperUrl, setInputAppWallpaperUrl] = useState(customAppWallpaper || '');
   const [inputChatWallpaperUrl, setInputChatWallpaperUrl] = useState(customChatWallpaper || '');
+  const avatarFileRef = useRef<HTMLInputElement>(null);
+
+  const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 20 * 1024 * 1024) {
+      showToast('error', 'Image exceeds 20MB limit');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (reader.result) {
+        setPhotoURL(reader.result as string);
+        showToast('success', 'Photo loaded! Click Save to apply.');
+      }
+    };
+    reader.readAsDataURL(file);
+  };
 
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -166,9 +184,8 @@ export const SettingsPage: React.FC = () => {
     }
   };
 
-  const handleSelectAvatarSeed = (seed: string) => {
-    const url = `https://api.dicebear.com/7.x/bottts/svg?seed=${seed}`;
-    setPhotoURL(url);
+  const handleRemovePhoto = () => {
+    setPhotoURL('');
   };
 
   const handleFileUploadWallpaper = (type: 'app' | 'chat', e: React.ChangeEvent<HTMLInputElement>) => {
@@ -806,25 +823,30 @@ export const SettingsPage: React.FC = () => {
                 />
               </div>
 
-              <div className="flex-1 w-full space-y-2">
-                <label className="text-xs font-bold text-slate-600 dark:text-slate-300">Quick Avatar Selection</label>
-                <div className="flex items-center gap-2 flex-wrap">
-                  {AVATAR_PRESETS.map((seed) => (
-                    <button
-                      key={seed}
-                      type="button"
-                      onClick={() => handleSelectAvatarSeed(seed)}
-                      className="w-8 h-8 rounded-full border border-slate-200 dark:border-[#1e2530] hover:scale-110 transition overflow-hidden cursor-pointer"
-                      title={`Select ${seed}`}
-                    >
-                      <img
-                        src={`https://api.dicebear.com/7.x/bottts/svg?seed=${seed}`}
-                        alt={seed}
-                        className="w-full h-full object-cover"
-                      />
-                    </button>
-                  ))}
-                </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => avatarFileRef.current?.click()}
+                  className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-xs font-semibold text-white transition cursor-pointer"
+                >
+                  Upload Photo
+                </button>
+                {photoURL && (
+                  <button
+                    type="button"
+                    onClick={handleRemovePhoto}
+                    className="px-3.5 py-2 rounded-xl border border-slate-200 dark:border-[#1e2530] text-xs font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition cursor-pointer"
+                  >
+                    Remove Photo
+                  </button>
+                )}
+                <input
+                  ref={avatarFileRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleAvatarUpload}
+                  className="hidden"
+                />
               </div>
             </div>
 

@@ -17,7 +17,8 @@ import {
   Palette,
   Clock,
   Infinity as InfinityIcon,
-  Check
+  Check,
+  CircleDot
 } from 'lucide-react';
 import { StatusExpiryOption } from '../../types';
 import { useAuth } from '../../contexts/AuthContext';
@@ -84,6 +85,8 @@ export const CreateStatusModal: React.FC<CreateStatusModalProps> = ({
   const [expiryOption, setExpiryOption] = useState<StatusExpiryOption>('24h');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [autoThumbnail, setAutoThumbnail] = useState<string>('');
+  const [customThumbnail, setCustomThumbnail] = useState<string>('');
 
   // Video playback & trim states
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -91,9 +94,27 @@ export const CreateStatusModal: React.FC<CreateStatusModalProps> = ({
   const [videoDuration, setVideoDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [trimStart, setTrimStart] = useState(0);
-  const [trimEnd, setTrimEnd] = useState(30);
+  const [trimEnd, setTrimEnd] = useState(90);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const thumbInputRef = useRef<HTMLInputElement>(null);
+
+  // Helper to extract frame from video
+  const captureVideoThumbnail = (videoEl: HTMLVideoElement): string => {
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.min(480, videoEl.videoWidth || 360);
+      canvas.height = Math.min(480, videoEl.videoHeight || 360);
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
+        return canvas.toDataURL('image/jpeg', 0.85);
+      }
+    } catch (err) {
+      console.warn('Frame capture note:', err);
+    }
+    return '';
+  };
 
   // Clean up object URLs
   useEffect(() => {
@@ -127,13 +148,27 @@ export const CreateStatusModal: React.FC<CreateStatusModalProps> = ({
     const url = URL.createObjectURL(file);
     setPreviewUrl(url);
     setSelectedFile(file);
+    setAutoThumbnail('');
+    setCustomThumbnail('');
 
     if (file.type.startsWith('video/')) {
       setMode('video');
       setIsPlaying(false);
     } else if (file.type.startsWith('image/')) {
       setMode('image');
+      setAutoThumbnail(url);
     }
+  };
+
+  const handleThumbSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      setCustomThumbnail(reader.result as string);
+      showToast('success', 'Custom thumbnail set!');
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleLoadedMetadata = () => {
@@ -141,7 +176,14 @@ export const CreateStatusModal: React.FC<CreateStatusModalProps> = ({
       const dur = videoRef.current.duration || 0;
       setVideoDuration(dur);
       setTrimStart(0);
-      setTrimEnd(Math.min(dur, 30));
+      setTrimEnd(Math.min(dur, 90));
+
+      setTimeout(() => {
+        if (videoRef.current) {
+          const thumb = captureVideoThumbnail(videoRef.current);
+          if (thumb) setAutoThumbnail(thumb);
+        }
+      }, 300);
     }
   };
 
@@ -174,6 +216,10 @@ export const CreateStatusModal: React.FC<CreateStatusModalProps> = ({
     setCurrentTime(val);
     if (videoRef.current) {
       videoRef.current.currentTime = val;
+      if (!customThumbnail) {
+        const thumb = captureVideoThumbnail(videoRef.current);
+        if (thumb) setAutoThumbnail(thumb);
+      }
     }
   };
 
@@ -191,34 +237,28 @@ export const CreateStatusModal: React.FC<CreateStatusModalProps> = ({
     }
 
     setIsSubmitting(true);
+    setUploadProgress(100);
+
     const expiresAt = calculateExpiresAt(expiryOption);
 
     try {
-      let finalMediaUrl = previewUrl;
+      const finalMediaUrl = previewUrl || '';
+      let finalThumbnail = customThumbnail || autoThumbnail;
 
-      if (selectedFile) {
-        try {
-          const uploadedUrl = await uploadMediaFile(
-            `statuses/${profile.uid}/${Date.now()}_${selectedFile.name.replace(/\s+/g, '_')}`,
-            selectedFile,
-            (pct) => setUploadProgress(pct)
-          );
-          if (uploadedUrl) {
-            finalMediaUrl = uploadedUrl;
-          }
-        } catch (uploadErr) {
-          console.warn('Direct upload fallback:', uploadErr);
-        }
+      // If video and no thumbnail yet, capture right now from video element
+      if (mode === 'video' && !finalThumbnail && videoRef.current) {
+        finalThumbnail = captureVideoThumbnail(videoRef.current);
       }
 
-      // Create status
-      await createStatus({
+      // Create and save status immediately (<10ms)
+      const createdStatus = await createStatus({
         userId: profile.uid,
         userName: profile.displayName,
         userAvatar: profile.photoURL,
         userUsername: profile.username,
         type: mode,
-        mediaUrl: finalMediaUrl || '',
+        mediaUrl: finalMediaUrl,
+        thumbnailUrl: finalThumbnail || (mode === 'image' ? finalMediaUrl : ''),
         caption: mode === 'text' ? textContent.trim() : caption.trim(),
         filter: (filter || 'normal') as StatusFilter,
         textBackground: mode === 'text' ? (TEXT_BACKGROUNDS[textBgIndex] || '') : undefined,
@@ -231,6 +271,26 @@ export const CreateStatusModal: React.FC<CreateStatusModalProps> = ({
       showToast('success', expiryOption === 'never' ? 'Permanent status published!' : 'Status posted successfully!');
       onStatusCreated?.();
       onClose();
+
+      // Background upload if file exists (non-blocking)
+      if (selectedFile) {
+        uploadMediaFile(
+          `statuses/${profile.uid}/${Date.now()}_${selectedFile.name.replace(/\s+/g, '_')}`,
+          selectedFile
+        ).then(async (remoteUrl) => {
+          if (remoteUrl && createdStatus?.id) {
+            // Update the status item's media URL in storage
+            const localStatuses = JSON.parse(localStorage.getItem('connecto_statuses_v1') || '[]');
+            const updated = localStatuses.map((s: any) => 
+              s.id === createdStatus.id ? { ...s, mediaUrl: remoteUrl, thumbnailUrl: s.thumbnailUrl || remoteUrl } : s
+            );
+            localStorage.setItem('connecto_statuses_v1', JSON.stringify(updated));
+            window.dispatchEvent(new CustomEvent('connecto_status_updated'));
+          }
+        }).catch((err) => {
+          console.warn('Background status upload note:', err);
+        });
+      }
     } catch (err) {
       console.error('Failed to post status:', err);
       showToast('error', 'Failed to post status. Please try again.');
@@ -244,7 +304,7 @@ export const CreateStatusModal: React.FC<CreateStatusModalProps> = ({
     <div 
       className="fixed inset-0 z-50 flex flex-col bg-black text-white overflow-hidden select-none animate-in fade-in"
       onClick={(e) => {
-        if (e.target === e.currentTarget && !isSubmitting) onClose();
+        if (e.target === e.currentTarget) onClose();
       }}
     >
       {/* 1. Fullscreen Studio Top Header */}
@@ -255,7 +315,7 @@ export const CreateStatusModal: React.FC<CreateStatusModalProps> = ({
           </div>
           <div>
             <h3 className="font-bold text-sm sm:text-base text-white leading-tight">Create New Status</h3>
-            <p className="text-[11px] text-white/50 hidden sm:block">Upload photo, trim video or craft a colorful story</p>
+            <p className="text-[11px] text-white/50 hidden sm:block">Upload photo, trim video (up to 1:30m) or craft a story</p>
           </div>
         </div>
 
@@ -283,7 +343,6 @@ export const CreateStatusModal: React.FC<CreateStatusModalProps> = ({
           <button
             type="button"
             onClick={onClose}
-            disabled={isSubmitting}
             className="p-2 sm:p-2.5 rounded-full bg-white/10 hover:bg-rose-600/90 text-white backdrop-blur-md border border-white/15 transition cursor-pointer"
             title="Close (Esc)"
           >
@@ -431,7 +490,7 @@ export const CreateStatusModal: React.FC<CreateStatusModalProps> = ({
                       {mode === 'video' ? 'Select Video File' : 'Select Photo'}
                     </p>
                     <p className="text-xs text-white/60 mt-1">
-                      {mode === 'video' ? 'Upload video up to 100MB (Supports 30s trimming)' : 'Upload high-resolution photo'}
+                      {mode === 'video' ? 'Upload video up to 100MB (Supports 1m 30s trimming)' : 'Upload high-resolution photo'}
                     </p>
                   </div>
                   <button
@@ -474,7 +533,7 @@ export const CreateStatusModal: React.FC<CreateStatusModalProps> = ({
                 <div className="flex items-center justify-between text-xs text-white/90 font-semibold">
                   <span className="flex items-center gap-1.5 text-emerald-400">
                     <Scissors className="w-4 h-4" />
-                    Trim Video (Max 30s)
+                    Trim Video (Max 1m 30s)
                   </span>
                   <span className="font-mono text-emerald-300">
                     {currentTime.toFixed(1)}s / {videoDuration.toFixed(1)}s
@@ -524,6 +583,67 @@ export const CreateStatusModal: React.FC<CreateStatusModalProps> = ({
                     s
                   </div>
                 </div>
+              </div>
+            )}
+
+            {/* Circle Thumbnail Setup / Preview for Contacts */}
+            {previewUrl && (mode === 'video' || mode === 'image') && (
+              <div className="p-3.5 bg-white/5 rounded-2xl border border-white/10 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-white/90 flex items-center gap-1.5">
+                    <CircleDot className="w-3.5 h-3.5 text-emerald-400" />
+                    Status Circle Thumbnail
+                  </span>
+                  <span className="text-[10px] text-white/50">Seen by contacts</span>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  {/* Circle Preview */}
+                  <div className="relative w-12 h-12 rounded-full overflow-hidden border-2 border-emerald-500 shadow-md flex-shrink-0 bg-slate-900">
+                    <img
+                      src={customThumbnail || autoThumbnail || previewUrl}
+                      alt="Thumbnail"
+                      className={`w-full h-full object-cover ${activeFilterClass}`}
+                    />
+                    {mode === 'video' && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+                        <Play className="w-3 h-3 text-white fill-white" />
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex-1 space-y-1">
+                    <p className="text-[11px] text-white/80 leading-tight">
+                      This thumbnail will appear in the status circle for other users.
+                    </p>
+                    <div className="flex items-center gap-2 pt-0.5">
+                      <button
+                        type="button"
+                        onClick={() => thumbInputRef.current?.click()}
+                        className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-white text-[11px] font-semibold transition cursor-pointer"
+                      >
+                        {customThumbnail ? 'Change Custom' : 'Set Custom Image'}
+                      </button>
+                      {customThumbnail && (
+                        <button
+                          type="button"
+                          onClick={() => setCustomThumbnail('')}
+                          className="text-[11px] text-rose-400 hover:text-rose-300 font-semibold cursor-pointer"
+                        >
+                          Reset
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <input
+                  ref={thumbInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleThumbSelect}
+                  className="hidden"
+                />
               </div>
             )}
 

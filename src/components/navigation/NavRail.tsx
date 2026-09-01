@@ -1,4 +1,5 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   MessageSquare, 
   CircleDashed, 
@@ -9,7 +10,8 @@ import {
   Sun, 
   Moon, 
   HelpCircle,
-  ShieldCheck
+  ShieldCheck,
+  LogOut
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -32,9 +34,15 @@ export const NavRail: React.FC<NavRailProps> = ({
   activeStatusCount = 0,
   onOpenHelp
 }) => {
-  const { profile, isAdmin } = useAuth();
+  const { profile, isAdmin, logout } = useAuth();
+  const navigate = useNavigate();
   const { effectiveTheme, toggleTheme, colorConfig } = useTheme();
   const { settings, updateSettings, showToast } = useNotifications();
+
+  const handleLogout = async () => {
+    await logout();
+    navigate('/login');
+  };
 
   const handleToggleNotifications = () => {
     const next = !settings.sounds;
@@ -192,6 +200,17 @@ export const NavRail: React.FC<NavRailProps> = ({
           aria-label="Help and shortcuts"
         >
           <HelpCircle className="w-5 h-5 stroke-[1.8]" />
+        </button>
+
+        {/* Sign Out Button */}
+        <button
+          type="button"
+          onClick={handleLogout}
+          className="p-2 rounded-xl text-rose-500 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition cursor-pointer"
+          title="Sign Out"
+          aria-label="Sign out"
+        >
+          <LogOut className="w-5 h-5 stroke-[1.8]" />
         </button>
       </div>
     </nav>

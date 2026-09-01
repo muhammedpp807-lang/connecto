@@ -8,6 +8,7 @@ import { getAllUsers } from '../../services/userService';
 import { Avatar } from '../common/Avatar';
 import { Logo } from '../common/Logo';
 import { formatConversationDate } from '../../utils/dateUtils';
+import { safeGetItem } from '../../services/storageEngine';
 import { NewChatModal } from './NewChatModal';
 import { CreateGroupModal } from './CreateGroupModal';
 import { StatusBar } from '../status/StatusBar';
@@ -58,7 +59,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ onSelectConversation, selected
       setConversations(convs);
 
       // Fast synchronous resolution from local store first
-      const currentUsers = JSON.parse(localStorage.getItem('connecto_db_users') || '[]');
+      const currentUsers = safeGetItem<UserProfile[]>('connecto_db_users') || [];
       const userMap: Record<string, UserProfile> = {};
       currentUsers.forEach((u: UserProfile) => {
         userMap[u.uid] = u;
@@ -157,6 +158,20 @@ export const Sidebar: React.FC<SidebarProps> = ({ onSelectConversation, selected
           >
             <MessageSquarePlus className="w-5 h-5 stroke-[1.8]" />
           </button>
+
+          {/* Sign Out Button */}
+          <button
+            type="button"
+            onClick={async () => {
+              await logout();
+              navigate('/login');
+            }}
+            className="p-2 rounded-xl text-rose-600 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition cursor-pointer ml-1"
+            title="Sign Out"
+            aria-label="Sign out"
+          >
+            <LogOut className="w-5 h-5 stroke-[1.8]" />
+          </button>
         </div>
       </div>
 
@@ -179,19 +194,20 @@ export const Sidebar: React.FC<SidebarProps> = ({ onSelectConversation, selected
             type="button"
             onClick={() => setFilter('all')}
             style={filter === 'all' ? { backgroundColor: colorConfig.primaryHex } : undefined}
-            className={`px-3 py-1 rounded-full text-[11px] font-semibold transition cursor-pointer ${
+            className={`px-3.5 py-1.5 rounded-full text-[11px] font-semibold transition cursor-pointer flex items-center gap-1.5 shadow-xs ${
               filter === 'all'
-                ? 'text-white shadow-xs'
-                : 'bg-[#f0f2f5] dark:bg-[#202c33] text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-200/70 dark:hover:bg-[#2a3942]'
+                ? 'text-white'
+                : 'bg-[#f0f2f5] dark:bg-[#202c33] text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/70 dark:hover:bg-[#2a3942]'
             }`}
           >
-            All
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>All</span>
           </button>
           <button
             type="button"
             onClick={() => setFilter('unread')}
             style={filter === 'unread' ? { backgroundColor: colorConfig.primaryHex } : undefined}
-            className={`px-3 py-1 rounded-full text-[11px] font-semibold transition cursor-pointer ${
+            className={`px-3 py-1.5 rounded-full text-[11px] font-semibold transition cursor-pointer ${
               filter === 'unread'
                 ? 'text-white shadow-xs'
                 : 'bg-[#f0f2f5] dark:bg-[#202c33] text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-200/70 dark:hover:bg-[#2a3942]'
@@ -320,7 +336,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ onSelectConversation, selected
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-1 mb-0.5">
                     <h4 className="text-xs font-bold truncate text-slate-900 dark:text-white">
-                      {isGroup ? conv.groupName : (recipient?.displayName || 'User')}
+                      {isGroup ? conv.groupName : (recipient?.displayName || recipient?.username || conv.lastSenderName || 'Chat')}
                     </h4>
                     <span className="text-[10px] text-slate-400 flex-shrink-0 font-medium">
                       {formatConversationDate(conv.lastMessageAt)}

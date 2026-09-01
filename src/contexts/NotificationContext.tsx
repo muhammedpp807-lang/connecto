@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { ToastNotification, UserSettings } from '../types';
 import { playNotificationSound } from '../utils/soundUtils';
+import { safeGetItem, safeSetItem } from '../services/storageEngine';
 
 interface NotificationContextType {
   toasts: ToastNotification[];
@@ -26,8 +27,8 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const [toasts, setToasts] = useState<ToastNotification[]>([]);
   const [settings, setSettings] = useState<UserSettings>(() => {
     try {
-      const saved = localStorage.getItem('connecto_user_settings');
-      if (saved) return { ...DEFAULT_SETTINGS, ...JSON.parse(saved) };
+      const saved = safeGetItem<Partial<UserSettings>>('connecto_user_settings');
+      if (saved && typeof saved === 'object') return { ...DEFAULT_SETTINGS, ...saved };
     } catch {
       // ignore
     }
@@ -37,7 +38,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const updateSettings = (updates: Partial<UserSettings>) => {
     setSettings((prev) => {
       const next = { ...prev, ...updates };
-      localStorage.setItem('connecto_user_settings', JSON.stringify(next));
+      safeSetItem('connecto_user_settings', next);
       return next;
     });
   };
