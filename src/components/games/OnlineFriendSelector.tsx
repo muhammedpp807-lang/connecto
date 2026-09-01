@@ -61,18 +61,13 @@ export const OnlineFriendSelector: React.FC<OnlineFriendSelectorProps> = ({
 
   const handleInvite = async (friend: UserProfile) => {
     if (!profile) return;
-    const online = isUserOnline(friend);
-    if (!online) {
-      showToast('warning', `${friend.displayName} is currently offline.`);
-      return;
-    }
 
     setInvitingUid(friend.uid);
     try {
       const invitation = await sendGameInvitation(profile, friend, 'tic-tac-toe');
       showToast('success', `Game invitation sent to ${friend.displayName}!`);
       onInvitationSent(invitation);
-    } catch (err) {
+    } catch {
       showToast('error', 'Failed to send invitation.');
     } finally {
       setInvitingUid(null);
@@ -231,11 +226,7 @@ export const OnlineFriendSelector: React.FC<OnlineFriendSelectorProps> = ({
 
                   {/* Right: Invitation Buttons */}
                   <div className="flex-shrink-0">
-                    {!isOnline ? (
-                      <span className="px-3.5 py-1.5 rounded-xl bg-slate-200/70 dark:bg-[#111b21] text-slate-400 dark:text-slate-500 text-xs font-bold select-none cursor-not-allowed">
-                        Offline
-                      </span>
-                    ) : isPlaying ? (
+                    {isPlaying ? (
                       <span className="px-3 py-1.5 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 text-xs font-bold flex items-center gap-1 select-none">
                         <span>🎮</span>
                         <span>Playing</span>
@@ -249,7 +240,7 @@ export const OnlineFriendSelector: React.FC<OnlineFriendSelectorProps> = ({
                         <button
                           type="button"
                           onClick={() => handleCancelInvite(pendingInv.id)}
-                          className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-xs font-bold transition"
+                          className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-xs font-bold transition cursor-pointer"
                           title="Cancel Invitation"
                         >
                           <X className="w-4 h-4" />
@@ -260,8 +251,12 @@ export const OnlineFriendSelector: React.FC<OnlineFriendSelectorProps> = ({
                         type="button"
                         onClick={() => handleInvite(friend)}
                         disabled={invitingUid === friend.uid}
-                        style={{ backgroundColor: colorConfig.primaryHex }}
-                        className="px-4 py-2 rounded-xl text-white font-bold text-xs flex items-center gap-1.5 shadow-xs hover:opacity-95 active:scale-95 transition cursor-pointer disabled:opacity-50"
+                        style={{ backgroundColor: isOnline ? colorConfig.primaryHex : undefined }}
+                        className={`px-4 py-2 rounded-xl font-bold text-xs flex items-center gap-1.5 shadow-xs hover:opacity-95 active:scale-95 transition cursor-pointer disabled:opacity-50 ${
+                          isOnline
+                            ? 'text-white'
+                            : 'bg-slate-200 dark:bg-[#202c33] text-slate-700 dark:text-slate-200 hover:bg-slate-300 dark:hover:bg-[#2a3942]'
+                        }`}
                       >
                         {invitingUid === friend.uid ? (
                           <Loader2 className="w-3.5 h-3.5 animate-spin" />

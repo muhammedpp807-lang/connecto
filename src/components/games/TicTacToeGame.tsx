@@ -222,7 +222,7 @@ export const TicTacToeGame: React.FC<TicTacToeGameProps> = ({
     ) {
       setIsRobotThinking(true);
       
-      // Add realistic thinking delay (500ms)
+      // Fast, snappy thinking delay (80ms)
       robotTimeoutRef.current = setTimeout(async () => {
         const bestMove = getBestRobotMove(game.board, 'O', 'X');
         if (bestMove !== -1) {
@@ -231,7 +231,7 @@ export const TicTacToeGame: React.FC<TicTacToeGameProps> = ({
           if (updated) setGame(updated);
         }
         setIsRobotThinking(false);
-      }, 500);
+      }, 80);
     }
 
     return () => {

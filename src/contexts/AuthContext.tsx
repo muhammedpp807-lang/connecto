@@ -80,19 +80,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Send immediate heartbeat on mount/change
     sendUserHeartbeat(uid);
 
-    // Heartbeat every 15 seconds to keep lastSeen fresh
+    // Heartbeat every 10 seconds to keep lastSeen fresh
     const heartbeatTimer = setInterval(() => {
-      if (document.visibilityState === 'visible') {
-        sendUserHeartbeat(uid);
-      }
-    }, 15000);
+      sendUserHeartbeat(uid);
+    }, 10000);
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
         sendUserHeartbeat(uid);
-      } else {
-        // Tab hidden or backgrounded
-        setUserOnlineStatus(uid, false);
       }
     };
 
@@ -100,11 +95,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       sendUserHeartbeat(uid);
     };
 
-    const handleBlur = () => {
-      // Don't immediately mark offline on brief blur, but handle pagehide
-    };
-
     const handlePageHide = () => {
+      // When closing the page or navigating away
       setUserOnlineStatus(uid, false);
     };
 
@@ -114,7 +106,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('focus', handleFocus);
-    window.addEventListener('blur', handleBlur);
     window.addEventListener('pagehide', handlePageHide);
     window.addEventListener('beforeunload', handleBeforeUnload);
 
@@ -122,7 +113,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       clearInterval(heartbeatTimer);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('focus', handleFocus);
-      window.removeEventListener('blur', handleBlur);
       window.removeEventListener('pagehide', handlePageHide);
       window.removeEventListener('beforeunload', handleBeforeUnload);
     };

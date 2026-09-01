@@ -259,11 +259,19 @@ export const updateUserProfile = async (uid: string, updates: Partial<UserProfil
 
 export const isUserOnline = (user?: Partial<UserProfile> | null): boolean => {
   if (!user) return false;
-  if (!user.isOnline) return false;
-  if (!user.lastSeen) return false;
-  const now = Date.now();
-  // Online if heartbeat was recorded within the last 45 seconds
-  return (now - user.lastSeen) < 45000;
+  // If explicitly flagged online
+  if (user.isOnline === true) {
+    // Only mark offline if lastSeen is older than 10 minutes (handles stale sessions)
+    if (user.lastSeen && (Date.now() - user.lastSeen > 10 * 60 * 1000)) {
+      return false;
+    }
+    return true;
+  }
+  // If isOnline is false or undefined, but lastSeen is within last 2 minutes
+  if (user.lastSeen && (Date.now() - user.lastSeen < 120000)) {
+    return true;
+  }
+  return false;
 };
 
 export const sendUserHeartbeat = async (uid: string): Promise<void> => {
