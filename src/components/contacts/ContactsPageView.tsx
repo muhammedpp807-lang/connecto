@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import { UserProfile } from '../../types';
 import { useAuth } from '../../contexts/AuthContext';
-import { getAllUsers, addContact, removeContact } from '../../services/userService';
+import { getAllUsers, addContact, removeContact, isUserOnline, subscribeToAllUsers } from '../../services/userService';
 import { Avatar } from '../common/Avatar';
 import { useNotifications } from '../../contexts/NotificationContext';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -37,20 +37,14 @@ export const ContactsPageView: React.FC<ContactsPageViewProps> = ({ onStartChat 
   const [startingChatWith, setStartingChatWith] = useState<string | null>(null);
 
   useEffect(() => {
-    loadUsers();
-  }, []);
-
-  const loadUsers = async () => {
     setLoading(true);
-    try {
-      const all = await getAllUsers();
+    const unsub = subscribeToAllUsers((all) => {
       setUsers(all.filter((u) => u.uid !== profile?.uid));
-    } catch {
-      showToast('error', 'Failed to load contacts');
-    } finally {
       setLoading(false);
-    }
-  };
+    });
+
+    return () => unsub();
+  }, [profile?.uid]);
 
   const handleStartConversation = async (user: UserProfile) => {
     if (!profile) return;
@@ -170,7 +164,7 @@ export const ContactsPageView: React.FC<ContactsPageViewProps> = ({ onStartChat 
                       src={user.photoURL}
                       name={user.displayName}
                       size="md"
-                      isOnline={user.isOnline}
+                      isOnline={isUserOnline(user)}
                     />
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">

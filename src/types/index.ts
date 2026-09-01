@@ -168,3 +168,77 @@ export interface SystemStats {
   storageUsedMb: number;
   uptimeHours: number;
 }
+
+// -------------------------------------------------------------
+// Games Feature Types
+// -------------------------------------------------------------
+
+export type GameType = 'tic-tac-toe';
+export type GameMode = 'robot' | 'offline' | 'online';
+export type GameStatus = 'waiting' | 'active' | 'won' | 'draw' | 'finished' | 'cancelled';
+export type TicTacToeSymbol = 'X' | 'O';
+export type TicTacToeBoard = ('' | 'X' | 'O')[];
+
+export interface GamePlayerInfo {
+  uid: string;
+  displayName: string;
+  photoURL?: string;
+  username?: string;
+}
+
+export interface GameSession {
+  id: string;
+  gameType: GameType;
+  mode: GameMode;
+  playerX: string; // userId or 'human' / 'player1'
+  playerO: string; // userId or 'robot' / 'player2'
+  playerXInfo?: GamePlayerInfo;
+  playerOInfo?: GamePlayerInfo;
+  board: string[]; // 9 elements: empty string, 'X', or 'O'
+  currentTurn: string; // userId or 'playerX' / 'playerO' / 'X' / 'O'
+  currentSymbol: TicTacToeSymbol;
+  starter: string; // userId or symbol who made the first move in current round
+  starterSymbol: TicTacToeSymbol;
+  round: number;
+  status: GameStatus;
+  winner: string | null; // userId or symbol 'X' / 'O' / 'robot'
+  winningLine?: number[] | null; // e.g. [0, 1, 2]
+  scores?: {
+    playerX: number;
+    playerO: number;
+    draws: number;
+  };
+  rematchRequestedBy?: string | null;
+  rematchAcceptedBy?: string[];
+  lastMoveAt?: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface GameInvitation {
+  id: string;
+  gameType: GameType;
+  gameId: string;
+  senderId: string;
+  senderName: string;
+  senderAvatar?: string;
+  senderUsername?: string;
+  receiverId: string;
+  receiverName?: string;
+  status: 'pending' | 'accepted' | 'declined' | 'expired' | 'cancelled';
+  createdAt: number;
+  expiresAt: number;
+}
+
+export interface GameHistoryItem {
+  id: string;
+  gameType: GameType;
+  mode: GameMode;
+  opponentName: string;
+  opponentAvatar?: string;
+  result: 'won' | 'lost' | 'draw';
+  playerSymbol: 'X' | 'O';
+  scoreSummary?: string;
+  roundsPlayed: number;
+  playedAt: number;
+}

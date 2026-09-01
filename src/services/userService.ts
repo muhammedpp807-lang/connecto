@@ -8,7 +8,9 @@ import {
   query, 
   where, 
   getDocs, 
-  limit 
+  limit,
+  onSnapshot,
+  Unsubscribe 
 } from 'firebase/firestore';
 import { db, isFirebaseConfigured } from '../firebase/config';
 import { UserProfile } from '../types';
@@ -255,28 +257,68 @@ export const updateUserProfile = async (uid: string, updates: Partial<UserProfil
   }
 };
 
-export const setUserOnlineStatus = async (uid: string, isOnline: boolean): Promise<void> => {
+export const isUserOnline = (user?: Partial<UserProfile> | null): boolean => {
+  if (!user) return false;
+  if (!user.isOnline) return false;
+  if (!user.lastSeen) return false;
+  const now = Date.now();
+  // Online if heartbeat was recorded within the last 45 seconds
+  return (now - user.lastSeen) < 45000;
+};
+
+export const sendUserHeartbeat = async (uid: string): Promise<void> => {
   if (!uid || FAKE_UIDS.has(uid)) return;
+  const now = Date.now();
+
+  // 1. Update local cache immediately
+  const users = getLocalUsers();
+  const idx = users.findIndex((u) => u.uid === uid);
+  if (idx >= 0) {
+    users[idx].isOnline = true;
+    users[idx].lastSeen = now;
+    users[idx].updatedAt = now;
+    saveLocalUsers(users);
+  }
+
+  // 2. Sync to Firestore
   if (isFirebaseConfigured && db && !isFirestoreQuotaExhausted()) {
     try {
       const userRef = doc(db, 'users', uid);
       await updateDoc(userRef, {
-        isOnline,
-        lastSeen: Date.now()
+        isOnline: true,
+        lastSeen: now,
+        updatedAt: now
       });
-      return;
     } catch (err) {
       handleFirestoreError(err);
-      // Non-blocking
     }
   }
+};
+
+export const setUserOnlineStatus = async (uid: string, isOnline: boolean): Promise<void> => {
+  if (!uid || FAKE_UIDS.has(uid)) return;
+  const now = Date.now();
 
   const users = getLocalUsers();
   const idx = users.findIndex((u) => u.uid === uid);
   if (idx >= 0) {
     users[idx].isOnline = isOnline;
-    users[idx].lastSeen = Date.now();
+    users[idx].lastSeen = now;
+    users[idx].updatedAt = now;
     saveLocalUsers(users);
+  }
+
+  if (isFirebaseConfigured && db && !isFirestoreQuotaExhausted()) {
+    try {
+      const userRef = doc(db, 'users', uid);
+      await updateDoc(userRef, {
+        isOnline,
+        lastSeen: now,
+        updatedAt: now
+      });
+    } catch (err) {
+      handleFirestoreError(err);
+    }
   }
 };
 
@@ -454,5 +496,65 @@ export const removeContact = async (userId: string, contactId: string): Promise<
   const contacts = (profile.contacts || []).filter((id) => id !== contactId);
   await updateUserProfile(userId, { contacts });
 };
+
+/**
+ * Subscribes to real-time updates for all users with automatic presence evaluation
+ */
+export function subscribeToAllUsers(
+  callback: (users: UserProfile[]) => void
+): () => void {
+  const notify = () => {
+    const list = getLocalUsers();
+    callback(list);
+  };
+
+  // Immediate notification with local cache
+  notify();
+
+  // Listen to broadcast channel for cross-tab updates
+  const handleBroadcast = (event: MessageEvent) => {
+    if (event.data?.type === 'USERS_UPDATED' || event.data?.type === 'ALL_DATA_CLEARED') {
+      notify();
+    }
+  };
+  userChannel?.addEventListener('message', handleBroadcast);
+
+  // Firestore real-time listener
+  let unsubFirestore: Unsubscribe | null = null;
+  if (isFirebaseConfigured && db && !isFirestoreQuotaExhausted()) {
+    try {
+      const usersRef = collection(db, 'users');
+      unsubFirestore = onSnapshot(usersRef, (snapshot) => {
+        const results: UserProfile[] = [];
+        snapshot.forEach((d) => {
+          const u = d.data() as UserProfile;
+          if (u && u.uid && !FAKE_UIDS.has(u.uid)) {
+            results.push(u);
+          }
+        });
+        if (results.length > 0) {
+          saveLocalUsers(results);
+          notify();
+        }
+      }, (err) => {
+        handleFirestoreError(err);
+      });
+    } catch (err) {
+      console.warn('Firestore users subscription setup note:', err);
+    }
+  }
+
+  // Active presence ticker: re-evaluates online status every 5 seconds
+  const ticker = setInterval(() => {
+    notify();
+  }, 5000);
+
+  return () => {
+    userChannel?.removeEventListener('message', handleBroadcast);
+    clearInterval(ticker);
+    unsubFirestore?.();
+  };
+}
+
 
 

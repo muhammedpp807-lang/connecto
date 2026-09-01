@@ -4,7 +4,7 @@ import { Conversation, UserProfile } from '../../types';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { subscribeToConversations } from '../../services/chatService';
-import { getAllUsers } from '../../services/userService';
+import { getAllUsers, isUserOnline, subscribeToAllUsers } from '../../services/userService';
 import { Avatar } from '../common/Avatar';
 import { Logo } from '../common/Logo';
 import { formatConversationDate } from '../../utils/dateUtils';
@@ -76,24 +76,30 @@ export const Sidebar: React.FC<SidebarProps> = ({ onSelectConversation, selected
       }
       setRecipientsMap(newRecipients);
 
-      // Fetch users in background
-      getAllUsers().then((allUsers) => {
+      // Live users subscription to keep presence fresh
+      const unsubUsers = subscribeToAllUsers((allUsers) => {
         const fullMap: Record<string, UserProfile> = {};
         allUsers.forEach((u) => {
           fullMap[u.uid] = u;
         });
 
-        const updatedRecipients: Record<string, UserProfile> = { ...newRecipients };
-        for (const conv of convs) {
-          if (!conv.isGroup) {
-            const otherUid = conv.participantIds.find((id) => id !== profile.uid) || conv.participantIds[0];
-            if (otherUid && fullMap[otherUid]) {
-              updatedRecipients[conv.id] = fullMap[otherUid];
+        setRecipientsMap((prev) => {
+          const updated: Record<string, UserProfile> = { ...prev };
+          for (const conv of convs) {
+            if (!conv.isGroup) {
+              const otherUid = conv.participantIds.find((id) => id !== profile.uid) || conv.participantIds[0];
+              if (otherUid && fullMap[otherUid]) {
+                updated[conv.id] = fullMap[otherUid];
+              }
             }
           }
-        }
-        setRecipientsMap(updatedRecipients);
-      }).catch(() => {});
+          return updated;
+        });
+      });
+
+      return () => {
+        unsubUsers();
+      };
     });
 
     return () => unsubscribe();
@@ -327,7 +333,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ onSelectConversation, selected
                     src={recipient?.photoURL}
                     name={recipient?.displayName || 'Chat'}
                     size="md"
-                    isOnline={recipient?.isOnline}
+                    isOnline={isUserOnline(recipient)}
                     showOnlineStatus
                   />
                 )}

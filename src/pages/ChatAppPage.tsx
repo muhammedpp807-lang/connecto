@@ -6,13 +6,16 @@ import { StatusPageView } from '../components/status/StatusPageView';
 import { SettingsPageView } from '../components/settings/SettingsPageView';
 import { ProfilePageView } from '../components/profile/ProfilePageView';
 import { ContactsPageView } from '../components/contacts/ContactsPageView';
+import { GamesPageView } from '../components/games/GamesPageView';
+import { GameInvitationNotificationBanner } from '../components/games/GameInvitationNotificationBanner';
 import { HelpModal } from '../components/common/HelpModal';
-import { UserProfile, Conversation } from '../types';
+import { UserProfile, Conversation, GameSession } from '../types';
 import { SEO } from '../components/common/SEO';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
 import { subscribeToConversations } from '../services/chatService';
 import { subscribeToStatuses } from '../services/statusService';
+import { subscribeToGameInvitations } from '../services/gameService';
 
 export const ChatAppPage: React.FC = () => {
   const { profile } = useAuth();
@@ -25,9 +28,13 @@ export const ChatAppPage: React.FC = () => {
   const [mobileView, setMobileView] = useState<'sidebar' | 'chat'>('sidebar');
   const [showHelpModal, setShowHelpModal] = useState(false);
 
-  // Real-time unread badges & status counts
+  // Active game launched from notification banner or invite
+  const [activeGameFromBanner, setActiveGameFromBanner] = useState<GameSession | null>(null);
+
+  // Real-time unread badges & status counts & game invites
   const [unreadCount, setUnreadCount] = useState(0);
   const [activeStatusesCount, setActiveStatusesCount] = useState(0);
+  const [activeGamesCount, setActiveGamesCount] = useState(0);
 
   useEffect(() => {
     if (!profile) return;
@@ -49,9 +56,17 @@ export const ChatAppPage: React.FC = () => {
       setActiveStatusesCount(count);
     });
 
+    const unsubGames = subscribeToGameInvitations(profile.uid, (invs) => {
+      const pendingIncoming = invs.filter(
+        (i) => i.receiverId === profile.uid && i.status === 'pending' && i.expiresAt > Date.now()
+      );
+      setActiveGamesCount(pendingIncoming.length);
+    });
+
     return () => {
       unsubConvs();
       unsubStatus();
+      unsubGames();
     };
   }, [profile]);
 
@@ -88,6 +103,8 @@ export const ChatAppPage: React.FC = () => {
 
   const titleHeader = activeTab === 'status'
     ? 'Pulse – Status Updates'
+    : activeTab === 'games'
+    ? 'Pulse – Games & Tic-Tac-Toe'
     : activeTab === 'settings'
     ? 'Pulse – Settings & Preferences'
     : activeTab === 'profile'
@@ -115,6 +132,14 @@ export const ChatAppPage: React.FC = () => {
     >
       <SEO title={titleHeader} />
 
+      {/* Real-time Game Invitation Top Banner */}
+      <GameInvitationNotificationBanner
+        onAcceptGame={(session) => {
+          setActiveGameFromBanner(session);
+          setActiveTab('games');
+        }}
+      />
+
       {/* 1. Leftmost Vertical Nav Rail (Pulse) */}
       <NavRail
         activeTab={activeTab}
@@ -126,6 +151,7 @@ export const ChatAppPage: React.FC = () => {
         }}
         unreadChatsCount={unreadCount}
         activeStatusCount={activeStatusesCount}
+        activeGamesCount={activeGamesCount}
         onOpenHelp={() => setShowHelpModal(true)}
       />
 
@@ -171,10 +197,18 @@ export const ChatAppPage: React.FC = () => {
           <ContactsPageView onStartChat={handleStartChatFromContacts} />
         )}
 
-        {/* Tab D: Settings Screen */}
+        {/* Tab D: Games Screen (Tic-Tac-Toe, Multiplayer, AI) */}
+        {activeTab === 'games' && (
+          <GamesPageView
+            initialGameSession={activeGameFromBanner}
+            onClearInitialGame={() => setActiveGameFromBanner(null)}
+          />
+        )}
+
+        {/* Tab E: Settings Screen */}
         {activeTab === 'settings' && <SettingsPageView />}
 
-        {/* Tab E: Profile Screen */}
+        {/* Tab F: Profile Screen */}
         {activeTab === 'profile' && <ProfilePageView />}
       </div>
 
@@ -183,4 +217,5 @@ export const ChatAppPage: React.FC = () => {
     </div>
   );
 };
+
 

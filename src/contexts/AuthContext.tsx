@@ -10,7 +10,7 @@ import {
   LoginParams, 
   RegisterParams 
 } from '../services/authService';
-import { getUserProfile, setUserOnlineStatus, updateUserProfile } from '../services/userService';
+import { getUserProfile, setUserOnlineStatus, updateUserProfile, sendUserHeartbeat } from '../services/userService';
 import { safeSetItem, safeRemoveItem } from '../services/storageEngine';
 
 interface AuthContextType {
@@ -49,7 +49,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const saved = getSavedSessionUser();
     if (saved) {
       setProfile(saved);
-      setUserOnlineStatus(saved.uid, true);
+      sendUserHeartbeat(saved.uid);
     }
 
     let unsubscribe = () => {};
@@ -59,7 +59,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setCurrentUser(fbUser);
         if (fbUser) {
           await fetchAndSetProfile(fbUser.uid);
-          await setUserOnlineStatus(fbUser.uid, true);
+          await sendUserHeartbeat(fbUser.uid);
         }
         setLoading(false);
       });
@@ -67,19 +67,66 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setLoading(false);
     }
 
-    // Set offline on tab close
-    const handleBeforeUnload = () => {
-      if (profile?.uid) {
-        setUserOnlineStatus(profile.uid, false);
+    return () => {
+      unsubscribe();
+    };
+  }, [fetchAndSetProfile]);
+
+  // Active presence heartbeat loop & tab visibility lifecycle
+  useEffect(() => {
+    if (!profile?.uid) return;
+    const uid = profile.uid;
+
+    // Send immediate heartbeat on mount/change
+    sendUserHeartbeat(uid);
+
+    // Heartbeat every 15 seconds to keep lastSeen fresh
+    const heartbeatTimer = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        sendUserHeartbeat(uid);
+      }
+    }, 15000);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        sendUserHeartbeat(uid);
+      } else {
+        // Tab hidden or backgrounded
+        setUserOnlineStatus(uid, false);
       }
     };
+
+    const handleFocus = () => {
+      sendUserHeartbeat(uid);
+    };
+
+    const handleBlur = () => {
+      // Don't immediately mark offline on brief blur, but handle pagehide
+    };
+
+    const handlePageHide = () => {
+      setUserOnlineStatus(uid, false);
+    };
+
+    const handleBeforeUnload = () => {
+      setUserOnlineStatus(uid, false);
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleFocus);
+    window.addEventListener('blur', handleBlur);
+    window.addEventListener('pagehide', handlePageHide);
     window.addEventListener('beforeunload', handleBeforeUnload);
 
     return () => {
-      unsubscribe();
+      clearInterval(heartbeatTimer);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('blur', handleBlur);
+      window.removeEventListener('pagehide', handlePageHide);
       window.removeEventListener('beforeunload', handleBeforeUnload);
     };
-  }, [fetchAndSetProfile, profile?.uid]);
+  }, [profile?.uid]);
 
   const login = async (params: LoginParams) => {
     setLoading(true);

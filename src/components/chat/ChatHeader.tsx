@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Conversation, UserProfile } from '../../types';
 import { Avatar } from '../common/Avatar';
 import { formatLastSeen } from '../../utils/dateUtils';
+import { isUserOnline } from '../../services/userService';
 import { Phone, Video, MoreVertical, ArrowLeft, Users, Info, X } from 'lucide-react';
 import { useNotifications } from '../../contexts/NotificationContext';
 import { GroupInfoModal } from './GroupInfoModal';
@@ -78,7 +79,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
                 src={recipient?.photoURL}
                 name={recipient?.displayName || 'User'}
                 size="md"
-                isOnline={recipient?.isOnline}
+                isOnline={isUserOnline(recipient)}
                 showOnlineStatus
               />
             )}
@@ -92,10 +93,10 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
                   <span>
                     Group • {conversation?.participantIds?.length || 0} members
                   </span>
-                ) : recipient?.isOnline ? (
+                ) : isUserOnline(recipient) ? (
                   <span className="text-emerald-600 dark:text-emerald-400 font-semibold">Online</span>
                 ) : (
-                  formatLastSeen(recipient?.lastSeen, recipient?.isOnline)
+                  formatLastSeen(recipient?.lastSeen, false)
                 )}
               </p>
             </div>

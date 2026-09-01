@@ -4,6 +4,7 @@ import {
   MessageSquare, 
   CircleDashed, 
   Users, 
+  Gamepad2,
   Sliders, 
   User, 
   Bell, 
@@ -17,13 +18,14 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useNotifications } from '../../contexts/NotificationContext';
 
-export type AppNavTab = 'chats' | 'status' | 'contacts' | 'settings' | 'profile';
+export type AppNavTab = 'chats' | 'status' | 'contacts' | 'games' | 'settings' | 'profile';
 
 interface NavRailProps {
   activeTab: AppNavTab;
   onTabChange: (tab: AppNavTab) => void;
   unreadChatsCount?: number;
   activeStatusCount?: number;
+  activeGamesCount?: number;
   onOpenHelp?: () => void;
 }
 
@@ -32,6 +34,7 @@ export const NavRail: React.FC<NavRailProps> = ({
   onTabChange,
   unreadChatsCount = 0,
   activeStatusCount = 0,
+  activeGamesCount = 0,
   onOpenHelp
 }) => {
   const { profile, isAdmin, logout } = useAuth();
@@ -67,7 +70,12 @@ export const NavRail: React.FC<NavRailProps> = ({
       id: 'contacts',
       label: 'Contacts',
       icon: <Users className="w-5 h-5 stroke-[1.8]" />,
-      // No badge as requested
+    },
+    {
+      id: 'games',
+      label: 'Games',
+      icon: <Gamepad2 className="w-5 h-5 stroke-[1.8]" />,
+      badge: activeGamesCount > 0 ? activeGamesCount : undefined
     },
     {
       id: 'settings',
