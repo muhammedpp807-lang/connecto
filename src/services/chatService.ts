@@ -162,10 +162,12 @@ export const subscribeToConversations = (
           }
         },
         (err) => {
+          handleFirestoreError(err);
           console.warn('Firestore convs snapshot note:', err);
         }
       );
     } catch (err) {
+      handleFirestoreError(err);
       console.warn('Firestore subscribeToConversations note:', err);
     }
   }
@@ -231,10 +233,12 @@ export const subscribeToMessages = (
           }
         },
         (err) => {
+          handleFirestoreError(err);
           console.warn('Firestore messages snapshot note:', err);
         }
       );
     } catch (err) {
+      handleFirestoreError(err);
       console.warn('Firestore subscribeToMessages note:', err);
     }
   }

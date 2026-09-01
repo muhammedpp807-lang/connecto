@@ -21,7 +21,7 @@ import {
   TicTacToeSymbol 
 } from '../types';
 import { evaluateBoard, getNextRoundStarter } from './tictactoeEngine';
-import { safeGetItem, safeSetItem } from './storageEngine';
+import { safeGetItem, safeSetItem, isFirestoreQuotaExhausted, handleFirestoreError } from './storageEngine';
 
 const LOCAL_GAMES_KEY = 'connecto_db_games';
 const LOCAL_INVITATIONS_KEY = 'connecto_db_invitations';
@@ -144,11 +144,12 @@ export async function sendGameInvitation(
   gameChannel?.postMessage({ type: 'INVITATION_SENT', invitation, game: initialGame });
 
   // Save to Firestore if connected
-  if (isFirebaseConfigured && db) {
+  if (isFirebaseConfigured && db && !isFirestoreQuotaExhausted()) {
     try {
       await setDoc(doc(db, 'game_invitations', invitationId), invitation);
       await setDoc(doc(db, 'games', gameId), initialGame);
     } catch (err) {
+      handleFirestoreError(err);
       console.warn('Firestore game invite save note:', err);
     }
   }
@@ -239,35 +240,43 @@ export function subscribeToGameInvitations(
   let unsubFirestore1: Unsubscribe | null = null;
   let unsubFirestore2: Unsubscribe | null = null;
 
-  if (isFirebaseConfigured && db) {
+  if (isFirebaseConfigured && db && !isFirestoreQuotaExhausted()) {
     try {
       const qRecv = query(
         collection(db, 'game_invitations'),
         where('receiverId', '==', userId)
       );
       unsubFirestore1 = onSnapshot(qRecv, (snap) => {
-        snap.docChanges().forEach((change) => {
-          const data = change.doc.data() as GameInvitation;
-          localInvitationsMap.set(data.id, data);
+        snap.docs.forEach((d) => {
+          const data = d.data() as GameInvitation;
+          if (data && data.id) {
+            localInvitationsMap.set(data.id, data);
+          }
         });
         persistLocalInvitations();
         notify();
-      }, (err) => console.warn('Firestore invite recv listener note:', err));
+      }, (err) => {
+        handleFirestoreError(err);
+      });
 
       const qSend = query(
         collection(db, 'game_invitations'),
         where('senderId', '==', userId)
       );
       unsubFirestore2 = onSnapshot(qSend, (snap) => {
-        snap.docChanges().forEach((change) => {
-          const data = change.doc.data() as GameInvitation;
-          localInvitationsMap.set(data.id, data);
+        snap.docs.forEach((d) => {
+          const data = d.data() as GameInvitation;
+          if (data && data.id) {
+            localInvitationsMap.set(data.id, data);
+          }
         });
         persistLocalInvitations();
         notify();
-      }, (err) => console.warn('Firestore invite send listener note:', err));
+      }, (err) => {
+        handleFirestoreError(err);
+      });
     } catch (err) {
-      console.warn('Firestore invitations setup note:', err);
+      handleFirestoreError(err);
     }
   }
 
@@ -342,7 +351,7 @@ export async function respondToGameInvitation(
   });
 
   // Firestore update
-  if (isFirebaseConfigured && db) {
+  if (isFirebaseConfigured && db && !isFirestoreQuotaExhausted()) {
     try {
       await updateDoc(doc(db, 'game_invitations', invitationId), {
         status: invitation.status
@@ -354,6 +363,7 @@ export async function respondToGameInvitation(
         });
       }
     } catch (err) {
+      handleFirestoreError(err);
       console.warn('Firestore respond invite update note:', err);
     }
   }
@@ -382,13 +392,15 @@ export async function cancelGameInvitation(invitationId: string): Promise<void> 
 
   gameChannel?.postMessage({ type: 'INVITATION_UPDATED', invitation, game });
 
-  if (isFirebaseConfigured && db) {
+  if (isFirebaseConfigured && db && !isFirestoreQuotaExhausted()) {
     try {
       await updateDoc(doc(db, 'game_invitations', invitationId), { status: 'cancelled' });
       if (game) {
         await updateDoc(doc(db, 'games', game.id), { status: 'cancelled', updatedAt: Date.now() });
       }
-    } catch {}
+    } catch (err) {
+      handleFirestoreError(err);
+    }
   }
 }
 
@@ -475,7 +487,7 @@ export function subscribeToGame(
   gameChannel?.addEventListener('message', handleBroadcast);
 
   let unsubFirestore: Unsubscribe | null = null;
-  if (isFirebaseConfigured && db) {
+  if (isFirebaseConfigured && db && !isFirestoreQuotaExhausted()) {
     try {
       unsubFirestore = onSnapshot(doc(db, 'games', gameId), (snap) => {
         if (snap.exists()) {
@@ -484,9 +496,11 @@ export function subscribeToGame(
           persistLocalGames();
           notify();
         }
-      }, (err) => console.warn('Firestore game listener note:', err));
+      }, (err) => {
+        handleFirestoreError(err);
+      });
     } catch (err) {
-      console.warn('Firestore subscribeToGame note:', err);
+      handleFirestoreError(err);
     }
   }
 
@@ -556,7 +570,7 @@ export async function executeGameMove(
   gameChannel?.postMessage({ type: 'GAME_UPDATED', game: updatedGame });
 
   // Sync to Firestore for online multiplayer
-  if (isFirebaseConfigured && db && game.mode === 'online') {
+  if (isFirebaseConfigured && db && game.mode === 'online' && !isFirestoreQuotaExhausted()) {
     try {
       await updateDoc(doc(db, 'games', gameId), {
         board: updatedGame.board,
@@ -570,6 +584,7 @@ export async function executeGameMove(
         updatedAt: now
       });
     } catch (err) {
+      handleFirestoreError(err);
       console.warn('Firestore executeGameMove note:', err);
     }
   }
@@ -615,14 +630,16 @@ export async function requestGameRematch(
     persistLocalGames();
     gameChannel?.postMessage({ type: 'GAME_UPDATED', game: updatedGame });
 
-    if (isFirebaseConfigured && db) {
+    if (isFirebaseConfigured && db && !isFirestoreQuotaExhausted()) {
       try {
         await updateDoc(doc(db, 'games', gameId), {
           rematchRequestedBy: playerUid,
           rematchAcceptedBy: Array.from(accepted),
           updatedAt: now
         });
-      } catch {}
+      } catch (err) {
+        handleFirestoreError(err);
+      }
     }
     return updatedGame;
   }
@@ -668,7 +685,7 @@ export async function requestGameRematch(
   persistLocalGames();
   gameChannel?.postMessage({ type: 'GAME_UPDATED', game: newGameSession });
 
-  if (isFirebaseConfigured && db) {
+  if (isFirebaseConfigured && db && !isFirestoreQuotaExhausted()) {
     try {
       await updateDoc(doc(db, 'games', gameId), {
         board: newGameSession.board,
@@ -689,6 +706,7 @@ export async function requestGameRematch(
         updatedAt: now
       });
     } catch (err) {
+      handleFirestoreError(err);
       console.warn('Firestore rematch start note:', err);
     }
   }
@@ -714,13 +732,15 @@ export async function leaveGame(gameId: string, playerUid: string): Promise<void
   persistLocalGames();
   gameChannel?.postMessage({ type: 'GAME_UPDATED', game: updatedGame });
 
-  if (isFirebaseConfigured && db) {
+  if (isFirebaseConfigured && db && !isFirestoreQuotaExhausted()) {
     try {
       await updateDoc(doc(db, 'games', gameId), {
         status: 'finished',
         updatedAt: now
       });
-    } catch {}
+    } catch (err) {
+      handleFirestoreError(err);
+    }
   }
 }
 
@@ -740,10 +760,12 @@ export async function saveGameHistory(userId: string, item: Omit<GameHistoryItem
   const trimmed = list.slice(0, 30);
   safeSetItem(historyKey, trimmed);
 
-  if (isFirebaseConfigured && db) {
+  if (isFirebaseConfigured && db && !isFirestoreQuotaExhausted()) {
     try {
       await setDoc(doc(db, 'users', userId, 'game_history', newItem.id), newItem);
-    } catch {}
+    } catch (err) {
+      handleFirestoreError(err);
+    }
   }
 }
 

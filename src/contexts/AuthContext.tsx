@@ -80,10 +80,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Send immediate heartbeat on mount/change
     sendUserHeartbeat(uid);
 
-    // Heartbeat every 10 seconds to keep lastSeen fresh
+    // Heartbeat every 30 seconds to keep local presence fresh
     const heartbeatTimer = setInterval(() => {
       sendUserHeartbeat(uid);
-    }, 10000);
+    }, 30000);
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
@@ -95,26 +95,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       sendUserHeartbeat(uid);
     };
 
-    const handlePageHide = () => {
-      // When closing the page or navigating away
-      setUserOnlineStatus(uid, false);
-    };
-
-    const handleBeforeUnload = () => {
-      setUserOnlineStatus(uid, false);
-    };
-
     document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('focus', handleFocus);
-    window.addEventListener('pagehide', handlePageHide);
-    window.addEventListener('beforeunload', handleBeforeUnload);
 
     return () => {
       clearInterval(heartbeatTimer);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('focus', handleFocus);
-      window.removeEventListener('pagehide', handlePageHide);
-      window.removeEventListener('beforeunload', handleBeforeUnload);
     };
   }, [profile?.uid]);
 

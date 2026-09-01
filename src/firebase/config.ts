@@ -1,8 +1,20 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, Firestore } from 'firebase/firestore';
+import { 
+  initializeFirestore, 
+  persistentLocalCache, 
+  persistentMultipleTabManager, 
+  disableNetwork,
+  setLogLevel,
+  Firestore 
+} from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 import appletConfig from '../../firebase-applet-config.json';
+
+// Silence Firestore internal console log spam (backoff delay notices, quota retries)
+try {
+  setLogLevel('silent');
+} catch {}
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY || appletConfig.apiKey || '',
@@ -21,6 +33,10 @@ let app: any;
 let authInstance: any;
 let dbInstance: Firestore | null = null;
 let storageInstance: any;
+
+export const disableFirestoreNetwork = async (): Promise<void> => {
+  // Gracefully no-op to allow real-time listeners and multi-device communication
+};
 
 if (isFirebaseConfigured) {
   try {

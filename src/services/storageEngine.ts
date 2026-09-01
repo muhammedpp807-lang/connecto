@@ -206,30 +206,62 @@ export function safeRemoveItem(key: string): void {
 }
 
 // ----------------------------------------------------
-// Firestore Quota Exhaustion Circuit Breaker
+// Firestore Quota Handling
 // ----------------------------------------------------
+const QUOTA_KEY = 'connecto_firestore_quota_exhausted_until';
+
+// Clear any stale local quota blocks so fresh real-time connections work
+if (typeof window !== 'undefined') {
+  try {
+    localStorage.removeItem(QUOTA_KEY);
+    sessionStorage.removeItem(QUOTA_KEY);
+  } catch {}
+}
+
 let firestoreQuotaExhaustedUntil = 0;
 
 export function isFirestoreQuotaExhausted(): boolean {
   return Date.now() < firestoreQuotaExhaustedUntil;
 }
 
-export function markFirestoreQuotaExhausted(cooldownSeconds = 300): void {
+export function markFirestoreQuotaExhausted(cooldownSeconds = 5): void {
+  // Short 5-second backoff for burst write throttling, never blocking read listeners
   firestoreQuotaExhaustedUntil = Date.now() + cooldownSeconds * 1000;
-  console.info(`[Connecto] Firestore write quota reached. Seamlessly utilizing local & IndexedDB engine (cooldown ${cooldownSeconds}s).`);
 }
 
 export function handleFirestoreError(err: any): void {
+  if (!err) return;
   const errMsg = String(err?.message || err || '');
   const errCode = String(err?.code || '');
   
   if (
     errCode === 'resource-exhausted' ||
+    errCode === 'unavailable' ||
     errMsg.includes('resource-exhausted') ||
     errMsg.includes('Quota limit exceeded') ||
     errMsg.includes('Quota exceeded') ||
     errMsg.includes('Free daily write units')
   ) {
-    markFirestoreQuotaExhausted(600); // 10 minutes quiet cooldown
+    markFirestoreQuotaExhausted(5);
   }
+}
+
+// Global browser safety listener to catch any unhandled Firestore errors without crashing UI
+if (typeof window !== 'undefined') {
+  window.addEventListener('error', (event) => {
+    const msg = event?.message || '';
+    if (msg.includes('resource-exhausted') || msg.includes('Quota limit exceeded') || msg.includes('Free daily write units')) {
+      markFirestoreQuotaExhausted(5);
+      event.preventDefault?.();
+    }
+  });
+
+  window.addEventListener('unhandledrejection', (event) => {
+    const reason = event?.reason;
+    const msg = String(reason?.message || reason || '');
+    if (msg.includes('resource-exhausted') || msg.includes('Quota limit exceeded') || msg.includes('Free daily write units')) {
+      markFirestoreQuotaExhausted(5);
+      event.preventDefault?.();
+    }
+  });
 }

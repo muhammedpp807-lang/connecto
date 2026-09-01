@@ -212,32 +212,35 @@ export const TicTacToeGame: React.FC<TicTacToeGameProps> = ({
     });
   };
 
-  // Robot AI Move Automation
+  // Robot AI Move Automation - Snappy and guaranteed execution
   useEffect(() => {
     if (
       game.mode === 'robot' &&
       game.status === 'active' &&
-      game.currentTurn === 'robot' &&
-      !isRobotThinking
+      game.currentTurn === 'robot'
     ) {
       setIsRobotThinking(true);
       
-      // Fast, snappy thinking delay (80ms)
-      robotTimeoutRef.current = setTimeout(async () => {
-        const bestMove = getBestRobotMove(game.board, 'O', 'X');
-        if (bestMove !== -1) {
-          if (!isSoundMuted) playMoveSound();
-          const updated = await executeGameMove(game.id, bestMove, 'robot', 'O');
-          if (updated) setGame(updated);
+      const timer = setTimeout(async () => {
+        try {
+          const bestMove = getBestRobotMove(game.board, 'O', 'X');
+          if (bestMove !== -1) {
+            if (!isSoundMuted) playMoveSound();
+            const updated = await executeGameMove(game.id, bestMove, 'robot', 'O');
+            if (updated) setGame(updated);
+          }
+        } catch (err) {
+          console.warn('Robot move error:', err);
+        } finally {
+          setIsRobotThinking(false);
         }
-        setIsRobotThinking(false);
-      }, 80);
-    }
+      }, 120);
 
-    return () => {
-      if (robotTimeoutRef.current) clearTimeout(robotTimeoutRef.current);
-    };
-  }, [game.id, game.mode, game.status, game.currentTurn, game.board, isSoundMuted, isRobotThinking]);
+      return () => {
+        clearTimeout(timer);
+      };
+    }
+  }, [game.id, game.mode, game.status, game.currentTurn, game.board, isSoundMuted]);
 
   // Handle player clicking a board cell
   const handleCellClick = async (index: number) => {

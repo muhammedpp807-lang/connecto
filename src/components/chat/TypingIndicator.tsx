@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { db, isFirebaseConfigured } from '../../firebase/config';
 import { doc, onSnapshot } from 'firebase/firestore';
+import { isFirestoreQuotaExhausted, handleFirestoreError } from '../../services/storageEngine';
 
 interface TypingIndicatorProps {
   conversationId: string;
@@ -18,19 +19,26 @@ export const TypingIndicator: React.FC<TypingIndicatorProps> = ({
   useEffect(() => {
     if (!conversationId || !recipientId) return;
 
-    if (isFirebaseConfigured && db) {
+    let unsubscribe: (() => void) | null = null;
+
+    if (isFirebaseConfigured && db && !isFirestoreQuotaExhausted()) {
       try {
         const convRef = doc(db, 'conversations', conversationId);
-        const unsubscribe = onSnapshot(convRef, (snap) => {
-          if (snap.exists()) {
-            const data = snap.data();
-            const typingState = Boolean(data.typingUsers?.[recipientId]);
-            setIsTyping(typingState);
+        unsubscribe = onSnapshot(
+          convRef, 
+          (snap) => {
+            if (snap.exists()) {
+              const data = snap.data();
+              const typingState = Boolean(data.typingUsers?.[recipientId]);
+              setIsTyping(typingState);
+            }
+          },
+          (err) => {
+            handleFirestoreError(err);
           }
-        });
-        return () => unsubscribe();
-      } catch {
-        // fallback
+        );
+      } catch (err) {
+        handleFirestoreError(err);
       }
     }
 

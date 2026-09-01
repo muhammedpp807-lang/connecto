@@ -174,7 +174,7 @@ export async function updateStatusExpiry(
 
   saveLocalStatuses(updated);
 
-  if (isFirebaseConfigured && db) {
+  if (isFirebaseConfigured && db && !isFirestoreQuotaExhausted()) {
     try {
       const statusRef = doc(db, 'statuses', statusId);
       await setDoc(statusRef, { 
@@ -182,6 +182,7 @@ export async function updateStatusExpiry(
         expiryOption: expiryOption || null 
       }, { merge: true });
     } catch (err) {
+      handleFirestoreError(err);
       console.warn('Firestore updateStatusExpiry note:', err);
     }
   }
@@ -264,7 +265,7 @@ export function subscribeToStatuses(
 
   // If Firebase is configured, subscribe to Firestore statuses
   let firestoreUnsub: Unsubscribe | null = null;
-  if (isFirebaseConfigured && db) {
+  if (isFirebaseConfigured && db && !isFirestoreQuotaExhausted()) {
     try {
       const q = collection(db, 'statuses');
 
@@ -291,10 +292,12 @@ export function subscribeToStatuses(
           emitGroups(merged);
         },
         (err) => {
+          handleFirestoreError(err);
           console.warn('Firestore status subscription error:', err);
         }
       );
     } catch (err) {
+      handleFirestoreError(err);
       console.warn('Firestore status query error:', err);
     }
   }
@@ -342,7 +345,7 @@ export async function markStatusAsViewed(
   if (updated) {
     saveLocalStatuses(newLocal);
 
-    if (isFirebaseConfigured && db) {
+    if (isFirebaseConfigured && db && !isFirestoreQuotaExhausted()) {
       try {
         const statusRef = doc(db, 'statuses', statusId);
         const targetStatus = newLocal.find((s) => s.id === statusId);
@@ -350,6 +353,7 @@ export async function markStatusAsViewed(
           await setDoc(statusRef, { viewers: targetStatus.viewers }, { merge: true });
         }
       } catch (err) {
+        handleFirestoreError(err);
         console.warn('Firestore markStatusAsViewed note:', err);
       }
     }
@@ -364,8 +368,9 @@ export async function deleteStatus(statusId: string): Promise<void> {
   const filtered = local.filter((s) => s.id !== statusId);
   saveLocalStatuses(filtered);
 
-  if (isFirebaseConfigured && db) {
+  if (isFirebaseConfigured && db && !isFirestoreQuotaExhausted()) {
     deleteDoc(doc(db, 'statuses', statusId)).catch((err) => {
+      handleFirestoreError(err);
       console.warn('Firestore deleteStatus note:', err);
     });
   }
@@ -380,9 +385,11 @@ export async function deleteAllUserStatuses(userId: string): Promise<void> {
   const remaining = local.filter((s) => s.userId !== userId);
   saveLocalStatuses(remaining);
 
-  if (isFirebaseConfigured && db) {
+  if (isFirebaseConfigured && db && !isFirestoreQuotaExhausted()) {
     toDelete.forEach((s) => {
-      deleteDoc(doc(db, 'statuses', s.id)).catch(() => {});
+      deleteDoc(doc(db, 'statuses', s.id)).catch((err) => {
+        handleFirestoreError(err);
+      });
     });
   }
 }

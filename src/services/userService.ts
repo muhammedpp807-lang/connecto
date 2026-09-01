@@ -259,20 +259,23 @@ export const updateUserProfile = async (uid: string, updates: Partial<UserProfil
 
 export const isUserOnline = (user?: Partial<UserProfile> | null): boolean => {
   if (!user) return false;
-  // If explicitly flagged online
+  const now = Date.now();
+  // If explicitly flagged online with active session
   if (user.isOnline === true) {
-    // Only mark offline if lastSeen is older than 10 minutes (handles stale sessions)
-    if (user.lastSeen && (Date.now() - user.lastSeen > 10 * 60 * 1000)) {
+    if (user.lastSeen && (now - user.lastSeen > 15 * 60 * 1000)) {
       return false;
     }
     return true;
   }
-  // If isOnline is false or undefined, but lastSeen is within last 2 minutes
-  if (user.lastSeen && (Date.now() - user.lastSeen < 120000)) {
+  // If isOnline was false/undefined, but lastSeen is within last 5 minutes
+  if (user.lastSeen && (now - user.lastSeen < 5 * 60 * 1000)) {
     return true;
   }
   return false;
 };
+
+// Last Firestore heartbeat sync timestamp per user to prevent quota burning
+const lastFirestoreHeartbeatMap = new Map<string, number>();
 
 export const sendUserHeartbeat = async (uid: string): Promise<void> => {
   if (!uid || FAKE_UIDS.has(uid)) return;
@@ -288,9 +291,15 @@ export const sendUserHeartbeat = async (uid: string): Promise<void> => {
     saveLocalUsers(users);
   }
 
-  // 2. Sync to Firestore
+  // 2. Sync to Firestore (throttled to at most once every 45s per user to be fast & quota-safe)
+  const lastSync = lastFirestoreHeartbeatMap.get(uid) || 0;
+  if (now - lastSync < 45000) {
+    return;
+  }
+
   if (isFirebaseConfigured && db && !isFirestoreQuotaExhausted()) {
     try {
+      lastFirestoreHeartbeatMap.set(uid, now);
       const userRef = doc(db, 'users', uid);
       await updateDoc(userRef, {
         isOnline: true,
@@ -318,6 +327,7 @@ export const setUserOnlineStatus = async (uid: string, isOnline: boolean): Promi
 
   if (isFirebaseConfigured && db && !isFirestoreQuotaExhausted()) {
     try {
+      lastFirestoreHeartbeatMap.set(uid, now);
       const userRef = doc(db, 'users', uid);
       await updateDoc(userRef, {
         isOnline,
@@ -404,13 +414,14 @@ export const deleteUser = async (uid: string): Promise<void> => {
   const users = getLocalUsers();
   const target = users.find((u) => u.uid === uid);
 
-  if (isFirebaseConfigured && db) {
+  if (isFirebaseConfigured && db && !isFirestoreQuotaExhausted()) {
     try {
       await deleteDoc(doc(db, 'users', uid));
       if (target?.username) {
         await deleteDoc(doc(db, 'usernames', target.username.toLowerCase()));
       }
     } catch (err) {
+      handleFirestoreError(err);
       console.warn('Firestore deleteUser fallback:', err);
     }
   }
