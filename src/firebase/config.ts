@@ -2,6 +2,7 @@ import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { 
   initializeFirestore, 
+  getFirestore,
   persistentLocalCache, 
   persistentMultipleTabManager, 
   disableNetwork,
@@ -11,7 +12,7 @@ import {
 import { getStorage } from 'firebase/storage';
 import appletConfig from '../../firebase-applet-config.json';
 
-// Silence Firestore internal console log spam (backoff delay notices, quota retries)
+// Silence Firestore internal console log spam
 try {
   setLogLevel('silent');
 } catch {}
@@ -43,16 +44,24 @@ if (isFirebaseConfigured) {
     app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
     authInstance = getAuth(app);
     
-    // Initialize Firestore with robust multi-tab offline cache and proper database ID
+    // Initialize Firestore with robust multi-tab cache and proper database ID
     const dbId = (appletConfig.firestoreDatabaseId && appletConfig.firestoreDatabaseId !== '(default)') 
       ? appletConfig.firestoreDatabaseId 
       : undefined;
 
-    dbInstance = initializeFirestore(app, {
-      localCache: persistentLocalCache({
-        tabManager: persistentMultipleTabManager()
-      })
-    }, dbId);
+    try {
+      dbInstance = initializeFirestore(app, {
+        localCache: persistentLocalCache({
+          tabManager: persistentMultipleTabManager()
+        })
+      }, dbId);
+    } catch {
+      try {
+        dbInstance = dbId ? getFirestore(app, dbId) : getFirestore(app);
+      } catch (errFallback) {
+        console.warn('Firestore fallback note:', errFallback);
+      }
+    }
 
     storageInstance = getStorage(app);
   } catch (err) {

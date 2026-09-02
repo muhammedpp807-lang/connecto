@@ -111,15 +111,6 @@ export function saveLocalMessages(convId: string, messages: Message[]) {
   }
 }
 
-function withTimeout<T>(promise: Promise<T>, ms = 2000): Promise<T> {
-  return Promise.race([
-    promise,
-    new Promise<T>((_, reject) =>
-      setTimeout(() => reject(new Error('Firestore operation timeout')), ms)
-    )
-  ]);
-}
-
 export const getOrCreateConversationId = (uid1: string, uid2: string): string => {
   return uid1 < uid2 ? `conv_${uid1}_${uid2}` : `conv_${uid2}_${uid1}`;
 };
@@ -355,13 +346,10 @@ export const createGroupConversation = async (
       const convRef = doc(db, 'conversations', groupId);
       const msgRef = doc(db, 'conversations', groupId, 'messages', initialMsg.id);
 
-      await withTimeout(
-        Promise.all([
-          setDoc(convRef, newGroup),
-          setDoc(msgRef, initialMsg)
-        ]),
-        3000
-      );
+      await Promise.all([
+        setDoc(convRef, newGroup),
+        setDoc(msgRef, initialMsg)
+      ]);
     } catch (err) {
       handleFirestoreError(err);
       console.warn('Firestore group creation sync note:', err);
@@ -398,13 +386,10 @@ export const updateGroupDetails = async (
   if (isFirebaseConfigured && db && !isFirestoreQuotaExhausted()) {
     try {
       const convRef = doc(db, 'conversations', conversationId);
-      await withTimeout(
-        updateDoc(convRef, {
-          ...updates,
-          updatedAt: now
-        }),
-        2500
-      );
+      await updateDoc(convRef, {
+        ...updates,
+        updatedAt: now
+      });
     } catch (err) {
       handleFirestoreError(err);
       console.warn('Firestore updateGroupDetails note:', err);
@@ -462,19 +447,16 @@ export const addGroupMembers = async (
       try {
         const convRef = doc(db, 'conversations', conversationId);
         const msgRef = doc(db, 'conversations', conversationId, 'messages', sysMsg.id);
-        await withTimeout(
-          Promise.all([
-            updateDoc(convRef, {
-              participantIds: updatedParticipants,
-              lastMessage: systemText,
-              lastMessageType: 'system',
-              lastMessageAt: now,
-              updatedAt: now
-            }),
-            setDoc(msgRef, sysMsg)
-          ]),
-          2500
-        );
+        await Promise.all([
+          updateDoc(convRef, {
+            participantIds: updatedParticipants,
+            lastMessage: systemText,
+            lastMessageType: 'system',
+            lastMessageAt: now,
+            updatedAt: now
+          }),
+          setDoc(msgRef, sysMsg)
+        ]);
       } catch (err) {
         handleFirestoreError(err);
         console.warn('Firestore addGroupMembers note:', err);
@@ -534,20 +516,17 @@ export const removeGroupMember = async (
       try {
         const convRef = doc(db, 'conversations', conversationId);
         const msgRef = doc(db, 'conversations', conversationId, 'messages', sysMsg.id);
-        await withTimeout(
-          Promise.all([
-            updateDoc(convRef, {
-              participantIds: updatedParticipants,
-              adminIds: updatedAdmins,
-              lastMessage: systemText,
-              lastMessageType: 'system',
-              lastMessageAt: now,
-              updatedAt: now
-            }),
-            setDoc(msgRef, sysMsg)
-          ]),
-          2500
-        );
+        await Promise.all([
+          updateDoc(convRef, {
+            participantIds: updatedParticipants,
+            adminIds: updatedAdmins,
+            lastMessage: systemText,
+            lastMessageType: 'system',
+            lastMessageAt: now,
+            updatedAt: now
+          }),
+          setDoc(msgRef, sysMsg)
+        ]);
       } catch (err) {
         handleFirestoreError(err);
         console.warn('Firestore removeGroupMember note:', err);
@@ -587,13 +566,10 @@ export const toggleGroupAdmin = async (
     if (isFirebaseConfigured && db && !isFirestoreQuotaExhausted()) {
       try {
         const convRef = doc(db, 'conversations', conversationId);
-        await withTimeout(
-          updateDoc(convRef, {
-            adminIds,
-            updatedAt: now
-          }),
-          2000
-        );
+        await updateDoc(convRef, {
+          adminIds,
+          updatedAt: now
+        });
       } catch (err) {
         handleFirestoreError(err);
         console.warn('Firestore toggleGroupAdmin note:', err);
@@ -767,13 +743,10 @@ export const sendMessage = async (
         ...firestoreUnreadPayload
       };
 
-      await withTimeout(
-        Promise.all([
-          addDoc(messagesRef, firestoreMsgPayload),
-          setDoc(convRef, firestoreConvPayload, { merge: true })
-        ]),
-        2500
-      );
+      await Promise.all([
+        addDoc(messagesRef, firestoreMsgPayload),
+        setDoc(convRef, firestoreConvPayload, { merge: true })
+      ]);
     } catch (err) {
       handleFirestoreError(err);
       console.warn('Firestore sendMessage sync note:', err);
@@ -928,24 +901,21 @@ export const deleteMessageForEveryone = async (
         const msgRef = doc(db, 'conversations', conversationId, 'messages', messageId);
         const convRef = doc(db, 'conversations', conversationId);
 
-        await withTimeout(
-          Promise.all([
-            updateDoc(msgRef, {
-              deletedForEveryone: true,
-              text: 'This message was deleted',
-              fileUrl: null,
-              fileName: null,
-              fileSize: null,
-              reactions: {},
-              updatedAt: now
-            }),
-            updateDoc(convRef, {
-              lastMessage: 'This message was deleted',
-              updatedAt: now
-            })
-          ]),
-          2500
-        );
+        await Promise.all([
+          updateDoc(msgRef, {
+            deletedForEveryone: true,
+            text: 'This message was deleted',
+            fileUrl: null,
+            fileName: null,
+            fileSize: null,
+            reactions: {},
+            updatedAt: now
+          }),
+          updateDoc(convRef, {
+            lastMessage: 'This message was deleted',
+            updatedAt: now
+          })
+        ]);
       } catch (err) {
         handleFirestoreError(err);
         console.warn('Firestore deleteMessageForEveryone note:', err);
@@ -982,13 +952,10 @@ export const deleteMessageForMe = async (
       try {
         const msgRef = doc(db, 'conversations', conversationId, 'messages', messageId);
         const updatedUsers = Array.from(new Set([...existingUsers, userId]));
-        await withTimeout(
-          updateDoc(msgRef, {
-            deletedForUsers: updatedUsers,
-            updatedAt: now
-          }),
-          2000
-        );
+        await updateDoc(msgRef, {
+          deletedForUsers: updatedUsers,
+          updatedAt: now
+        });
       } catch (err) {
         handleFirestoreError(err);
         console.warn('Firestore deleteMessageForMe note:', err);
@@ -1069,7 +1036,7 @@ export const getAllConversations = async (): Promise<Conversation[]> => {
   if (isFirebaseConfigured && db) {
     try {
       const convsRef = collection(db, 'conversations');
-      const snapshot = await withTimeout(getDocs(convsRef), 1500);
+      const snapshot = await getDocs(convsRef);
       snapshot.forEach((d) => {
         const conv = { id: d.id, ...d.data() } as Conversation;
         const existing = mergedMap.get(conv.id);

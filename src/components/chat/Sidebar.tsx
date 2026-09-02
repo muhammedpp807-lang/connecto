@@ -4,7 +4,7 @@ import { Conversation, UserProfile } from '../../types';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { subscribeToConversations } from '../../services/chatService';
-import { getAllUsers, isUserOnline, subscribeToAllUsers } from '../../services/userService';
+import { getAllUsers, isUserOnline, subscribeToAllUsers, getUserProfile } from '../../services/userService';
 import { Avatar } from '../common/Avatar';
 import { Logo } from '../common/Logo';
 import { formatConversationDate } from '../../utils/dateUtils';
@@ -42,6 +42,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ onSelectConversation, selected
   const navigate = useNavigate();
 
   const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [usersMap, setUsersMap] = useState<Record<string, UserProfile>>({});
   const [recipientsMap, setRecipientsMap] = useState<Record<string, UserProfile>>({});
   const [searchTerm, setSearchTerm] = useState('');
   const [filter, setFilter] = useState<ChatFilter>('all');
@@ -49,7 +50,23 @@ export const Sidebar: React.FC<SidebarProps> = ({ onSelectConversation, selected
   const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  // Subscribe to real-time conversations list
+  // 1. Subscribe to all users in real-time
+  useEffect(() => {
+    const currentUsers = safeGetItem<UserProfile[]>('connecto_db_users') || [];
+    const initialMap: Record<string, UserProfile> = {};
+    currentUsers.forEach((u) => { initialMap[u.uid] = u; });
+    setUsersMap(initialMap);
+
+    const unsubUsers = subscribeToAllUsers((allUsers) => {
+      const map: Record<string, UserProfile> = {};
+      allUsers.forEach((u) => { map[u.uid] = u; });
+      setUsersMap(map);
+    });
+
+    return () => unsubUsers();
+  }, []);
+
+  // 2. Subscribe to real-time conversations list
   useEffect(() => {
     if (!profile) return;
 
@@ -57,53 +74,35 @@ export const Sidebar: React.FC<SidebarProps> = ({ onSelectConversation, selected
 
     const unsubscribe = subscribeToConversations(profile.uid, (convs) => {
       setConversations(convs);
-
-      // Fast synchronous resolution from local store first
-      const currentUsers = safeGetItem<UserProfile[]>('connecto_db_users') || [];
-      const userMap: Record<string, UserProfile> = {};
-      currentUsers.forEach((u: UserProfile) => {
-        userMap[u.uid] = u;
-      });
-
-      const newRecipients: Record<string, UserProfile> = {};
-      for (const conv of convs) {
-        if (!conv.isGroup) {
-          const otherUid = conv.participantIds.find((id) => id !== profile.uid) || conv.participantIds[0];
-          if (otherUid && userMap[otherUid]) {
-            newRecipients[conv.id] = userMap[otherUid];
-          }
-        }
-      }
-      setRecipientsMap(newRecipients);
-
-      // Live users subscription to keep presence fresh
-      const unsubUsers = subscribeToAllUsers((allUsers) => {
-        const fullMap: Record<string, UserProfile> = {};
-        allUsers.forEach((u) => {
-          fullMap[u.uid] = u;
-        });
-
-        setRecipientsMap((prev) => {
-          const updated: Record<string, UserProfile> = { ...prev };
-          for (const conv of convs) {
-            if (!conv.isGroup) {
-              const otherUid = conv.participantIds.find((id) => id !== profile.uid) || conv.participantIds[0];
-              if (otherUid && fullMap[otherUid]) {
-                updated[conv.id] = fullMap[otherUid];
-              }
-            }
-          }
-          return updated;
-        });
-      });
-
-      return () => {
-        unsubUsers();
-      };
     });
 
     return () => unsubscribe();
   }, [profile]);
+
+  // 3. Derive recipients map whenever conversations or users update
+  useEffect(() => {
+    if (!profile) return;
+
+    const newRecipients: Record<string, UserProfile> = {};
+    for (const conv of conversations) {
+      if (!conv.isGroup && conv.participantIds) {
+        const otherUid = conv.participantIds.find((id) => id !== profile.uid) || conv.participantIds[0];
+        if (otherUid) {
+          if (usersMap[otherUid]) {
+            newRecipients[conv.id] = usersMap[otherUid];
+          } else {
+            // Lazy fetch if not yet in cache
+            getUserProfile(otherUid).then((p) => {
+              if (p) {
+                setRecipientsMap((prev) => ({ ...prev, [conv.id]: p }));
+              }
+            }).catch(() => {});
+          }
+        }
+      }
+    }
+    setRecipientsMap((prev) => ({ ...prev, ...newRecipients }));
+  }, [conversations, usersMap, profile]);
 
   const handleLogout = async () => {
     await logout();

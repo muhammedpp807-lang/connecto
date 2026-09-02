@@ -79,12 +79,12 @@ function withTimeout<T>(promise: Promise<T>, ms = 2000): Promise<T> {
 }
 
 export const getUserProfile = async (uid: string): Promise<UserProfile | null> => {
-  if (FAKE_UIDS.has(uid)) return null;
+  if (!uid || FAKE_UIDS.has(uid)) return null;
 
   if (isFirebaseConfigured && db) {
     try {
       const docRef = doc(db, 'users', uid);
-      const snap = await withTimeout(getDoc(docRef), 2000);
+      const snap = await getDoc(docRef);
       if (snap.exists()) {
         const data = snap.data() as UserProfile;
         // Keep local cache fresh
@@ -108,10 +108,10 @@ export const getUserByUsernameOrEmail = async (identifier: string): Promise<User
   const clean = identifier.toLowerCase().trim();
   if (!clean) return null;
 
-  // 1. Check local storage
+  // 1. Check local storage first
   const localUsers = getLocalUsers();
   const foundLocal = localUsers.find(
-    (u) => u.username.toLowerCase() === clean || u.email.toLowerCase() === clean
+    (u) => u.username?.toLowerCase() === clean || u.email?.toLowerCase() === clean
   );
   if (foundLocal) return foundLocal;
 
@@ -120,7 +120,7 @@ export const getUserByUsernameOrEmail = async (identifier: string): Promise<User
     try {
       // 2a. Check usernames index collection
       const usernameDocRef = doc(db, 'usernames', clean);
-      const usernameSnap = await withTimeout(getDoc(usernameDocRef), 2000);
+      const usernameSnap = await getDoc(usernameDocRef);
       if (usernameSnap.exists()) {
         const uid = usernameSnap.data()?.uid;
         if (uid) {
@@ -132,7 +132,7 @@ export const getUserByUsernameOrEmail = async (identifier: string): Promise<User
       // 2b. Query users collection by username
       const usersRef = collection(db, 'users');
       const usernameQuery = query(usersRef, where('username', '==', clean), limit(1));
-      const usernameSnapshots = await withTimeout(getDocs(usernameQuery), 2500);
+      const usernameSnapshots = await getDocs(usernameQuery);
       if (!usernameSnapshots.empty) {
         const profile = usernameSnapshots.docs[0].data() as UserProfile;
         if (profile) {
@@ -147,7 +147,7 @@ export const getUserByUsernameOrEmail = async (identifier: string): Promise<User
 
       // 2c. Query users collection by email
       const emailQuery = query(usersRef, where('email', '==', clean), limit(1));
-      const emailSnapshots = await withTimeout(getDocs(emailQuery), 2500);
+      const emailSnapshots = await getDocs(emailQuery);
       if (!emailSnapshots.empty) {
         const profile = emailSnapshots.docs[0].data() as UserProfile;
         if (profile) {
@@ -172,13 +172,13 @@ export const checkUsernameAvailable = async (username: string): Promise<boolean>
   if (!clean || clean.length < 3) return false;
 
   const users = getLocalUsers();
-  const localTaken = users.some((u) => u.username.toLowerCase() === clean);
+  const localTaken = users.some((u) => u.username?.toLowerCase() === clean);
   if (localTaken) return false;
 
   if (isFirebaseConfigured && db) {
     try {
       const usernameRef = doc(db, 'usernames', clean);
-      const snap = await withTimeout(getDoc(usernameRef), 1500);
+      const snap = await getDoc(usernameRef);
       return !snap.exists();
     } catch (err) {
       console.warn('Firestore username check note:', err);
@@ -210,16 +210,13 @@ export const createUserProfile = async (profile: UserProfile): Promise<void> => 
   }
   saveLocalUsers(users);
 
-  // Sync to Firestore in the background or with timeout
+  // Sync to Firestore
   if (isFirebaseConfigured && db && !isFirestoreQuotaExhausted()) {
     try {
-      await withTimeout(
-        Promise.all([
-          setDoc(doc(db, 'usernames', cleanUsername), { uid: profile.uid }),
-          setDoc(doc(db, 'users', profile.uid), newProfile)
-        ]),
-        2000
-      );
+      await Promise.all([
+        setDoc(doc(db, 'usernames', cleanUsername), { uid: profile.uid }, { merge: true }),
+        setDoc(doc(db, 'users', profile.uid), newProfile, { merge: true })
+      ]);
     } catch (err) {
       handleFirestoreError(err);
       console.warn('Firestore user creation note:', err);
@@ -243,13 +240,10 @@ export const updateUserProfile = async (uid: string, updates: Partial<UserProfil
   if (isFirebaseConfigured && db && !isFirestoreQuotaExhausted()) {
     try {
       const userRef = doc(db, 'users', uid);
-      await withTimeout(
-        updateDoc(userRef, {
-          ...updates,
-          updatedAt: Date.now()
-        }),
-        2000
-      );
+      await updateDoc(userRef, {
+        ...updates,
+        updatedAt: Date.now()
+      });
     } catch (err) {
       handleFirestoreError(err);
       console.warn('Firestore user update note:', err);
@@ -349,51 +343,32 @@ export const setUserOnlineStatus = async (uid: string, isOnline: boolean): Promi
 
 export const searchUsers = async (searchTerm: string, currentUid: string): Promise<UserProfile[]> => {
   const clean = searchTerm.toLowerCase().trim();
-  const users = getLocalUsers();
+  
+  // Ensure we have the latest user directory
+  let all = await getAllUsers();
+  if (!all || all.length === 0) {
+    all = getLocalUsers();
+  }
 
   if (!clean) {
-    // Return all other real users
-    return users.filter((u) => u.uid !== currentUid && !FAKE_UIDS.has(u.uid));
+    return all.filter((u) => u.uid !== currentUid && !FAKE_UIDS.has(u.uid));
   }
 
-  if (isFirebaseConfigured && db) {
-    try {
-      const usersRef = collection(db, 'users');
-      const q = query(
-        usersRef,
-        where('username', '>=', clean),
-        where('username', '<=', clean + '\uf8ff'),
-        limit(15)
-      );
-      const snapshot = await withTimeout(getDocs(q), 1500);
-      const results: UserProfile[] = [];
-      snapshot.forEach((d) => {
-        const data = d.data() as UserProfile;
-        if (data.uid !== currentUid && !FAKE_UIDS.has(data.uid)) {
-          results.push(data);
-        }
-      });
-      if (results.length > 0) return results;
-    } catch (err) {
-      console.warn('Firestore search note:', err);
-    }
-  }
-
-  return users.filter((u) => {
+  return all.filter((u) => {
     if (u.uid === currentUid || FAKE_UIDS.has(u.uid)) return false;
-    const nameMatch = u.displayName.toLowerCase().includes(clean);
-    const userMatch = u.username.toLowerCase().includes(clean);
-    const emailMatch = u.email.toLowerCase().includes(clean);
-    return nameMatch || userMatch || emailMatch;
+    const nameMatch = u.displayName?.toLowerCase().includes(clean);
+    const userMatch = u.username?.toLowerCase().includes(clean);
+    const emailMatch = u.email?.toLowerCase().includes(clean);
+    const aboutMatch = u.about?.toLowerCase().includes(clean);
+    return nameMatch || userMatch || emailMatch || aboutMatch;
   });
 };
 
 export const getAllUsers = async (): Promise<UserProfile[]> => {
-  const local = getLocalUsers();
   if (isFirebaseConfigured && db) {
     try {
       const usersRef = collection(db, 'users');
-      const snapshot = await withTimeout(getDocs(usersRef), 2000);
+      const snapshot = await getDocs(usersRef);
       const results: UserProfile[] = [];
       snapshot.forEach((d) => {
         const u = d.data() as UserProfile;
@@ -402,14 +377,19 @@ export const getAllUsers = async (): Promise<UserProfile[]> => {
         }
       });
       if (results.length > 0) {
-        saveLocalUsers(results);
-        return results;
+        const local = getLocalUsers();
+        const map = new Map<string, UserProfile>();
+        local.forEach((u) => map.set(u.uid, u));
+        results.forEach((u) => map.set(u.uid, { ...map.get(u.uid), ...u }));
+        const merged = Array.from(map.values());
+        saveLocalUsers(merged);
+        return merged;
       }
     } catch (err) {
       console.warn('Firestore getAllUsers note:', err);
     }
   }
-  return local;
+  return getLocalUsers();
 };
 
 export const lockUser = async (uid: string, isLocked: boolean): Promise<void> => {

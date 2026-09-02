@@ -1,19 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Users, 
   UserPlus, 
   Search, 
   MessageSquare, 
-  Check, 
-  Mail, 
-  Phone, 
-  Sparkles,
+  RotateCw,
   Loader2,
   X
 } from 'lucide-react';
 import { UserProfile } from '../../types';
 import { useAuth } from '../../contexts/AuthContext';
-import { getAllUsers, addContact, removeContact, isUserOnline, subscribeToAllUsers, getUserByUsernameOrEmail } from '../../services/userService';
+import { getAllUsers, addContact, isUserOnline, subscribeToAllUsers, getUserByUsernameOrEmail } from '../../services/userService';
 import { Avatar } from '../common/Avatar';
 import { useNotifications } from '../../contexts/NotificationContext';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -30,18 +27,28 @@ export const ContactsPageView: React.FC<ContactsPageViewProps> = ({ onStartChat 
 
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [newContactUsername, setNewContactUsername] = useState('');
   const [isAdding, setIsAdding] = useState(false);
   const [startingChatWith, setStartingChatWith] = useState<string | null>(null);
 
-  useEffect(() => {
-    setLoading(true);
-    getAllUsers().then((all) => {
+  const loadAllContacts = useCallback(async (isManual = false) => {
+    if (isManual) setIsRefreshing(true);
+    try {
+      const all = await getAllUsers();
       setUsers(all.filter((u) => u.uid !== profile?.uid));
+    } catch {
+      // Keep existing
+    } finally {
       setLoading(false);
-    }).catch(() => {});
+      if (isManual) setIsRefreshing(false);
+    }
+  }, [profile?.uid]);
+
+  useEffect(() => {
+    loadAllContacts();
 
     const unsub = subscribeToAllUsers((all) => {
       setUsers(all.filter((u) => u.uid !== profile?.uid));
@@ -49,7 +56,7 @@ export const ContactsPageView: React.FC<ContactsPageViewProps> = ({ onStartChat 
     });
 
     return () => unsub();
-  }, [profile?.uid]);
+  }, [profile?.uid, loadAllContacts]);
 
   const handleStartConversation = async (user: UserProfile) => {
     if (!profile) return;
@@ -91,6 +98,7 @@ export const ContactsPageView: React.FC<ContactsPageViewProps> = ({ onStartChat 
 
       await addContact(profile.uid, targetUser.uid);
       await refreshProfile();
+      await loadAllContacts();
       showToast('success', `Added ${targetUser.displayName} to contacts!`);
       setShowAddModal(false);
       setNewContactUsername('');
@@ -102,16 +110,16 @@ export const ContactsPageView: React.FC<ContactsPageViewProps> = ({ onStartChat 
   };
 
   const myContactIds = profile?.contacts || [];
-  const contactsList = users.filter((u) => myContactIds.includes(u.uid) || true); // show discovered community & saved contacts
+  const contactsList = users;
 
   const filtered = contactsList.filter((u) => {
     if (!searchTerm.trim()) return true;
     const term = searchTerm.toLowerCase();
-    return (
-      u.displayName.toLowerCase().includes(term) ||
-      u.username.toLowerCase().includes(term) ||
-      u.about?.toLowerCase().includes(term)
-    );
+    const nameMatch = u.displayName?.toLowerCase().includes(term);
+    const userMatch = u.username?.toLowerCase().includes(term);
+    const emailMatch = u.email?.toLowerCase().includes(term);
+    const aboutMatch = u.about?.toLowerCase().includes(term);
+    return nameMatch || userMatch || emailMatch || aboutMatch;
   });
 
   return (
@@ -119,21 +127,33 @@ export const ContactsPageView: React.FC<ContactsPageViewProps> = ({ onStartChat 
       {/* Header */}
       <div className="px-8 pt-8 pb-4 border-b border-[#e9edef] dark:border-[#1f2c34] bg-[#f0f2f5] dark:bg-[#111b21] flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">Contacts</h1>
+          <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">Contacts & Directory</h1>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-            {contactsList.length} total connections
+            {contactsList.length} users available
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={() => setShowAddModal(true)}
-          style={{ backgroundColor: colorConfig.primaryHex }}
-          className="px-4 py-2 rounded-xl text-white font-bold text-xs flex items-center gap-1.5 transition cursor-pointer shadow-xs active:scale-95 hover:opacity-90"
-        >
-          <UserPlus className="w-4 h-4 stroke-[2]" />
-          <span>Add Contact</span>
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => loadAllContacts(true)}
+            disabled={isRefreshing}
+            className="p-2 rounded-xl bg-slate-200/80 dark:bg-[#202c33] text-slate-700 dark:text-slate-200 hover:bg-slate-300 dark:hover:bg-[#2a3942] transition cursor-pointer"
+            title="Refresh contacts"
+          >
+            <RotateCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setShowAddModal(true)}
+            style={{ backgroundColor: colorConfig.primaryHex }}
+            className="px-4 py-2 rounded-xl text-white font-bold text-xs flex items-center gap-1.5 transition cursor-pointer shadow-xs active:scale-95 hover:opacity-90"
+          >
+            <UserPlus className="w-4 h-4 stroke-[2]" />
+            <span>Add Contact</span>
+          </button>
+        </div>
       </div>
 
       {/* Search Input */}
