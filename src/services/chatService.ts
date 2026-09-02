@@ -134,8 +134,7 @@ export const subscribeToConversations = (
     try {
       const q = query(
         collection(db, 'conversations'),
-        where('participantIds', 'array-contains', userId),
-        orderBy('updatedAt', 'desc')
+        where('participantIds', 'array-contains', userId)
       );
 
       unsubFirestore = onSnapshot(
@@ -145,21 +144,20 @@ export const subscribeToConversations = (
           snapshot.forEach((d) => {
             conversations.push({ id: d.id, ...d.data() } as Conversation);
           });
-          if (conversations.length > 0) {
-            // Merge with local to preserve immediate optimistic changes
-            const local = getLocalConversations();
-            const map = new Map<string, Conversation>();
-            conversations.forEach((c) => map.set(c.id, c));
-            local.forEach((c) => {
-              if (c.participantIds.includes(userId) && !map.has(c.id)) {
-                map.set(c.id, c);
-              }
-            });
-            const merged = Array.from(map.values());
-            merged.sort((a, b) => (b.lastMessageAt || 0) - (a.lastMessageAt || 0));
-            saveLocalConversations(merged);
-            onUpdate(merged);
-          }
+          
+          // Merge with local to preserve immediate optimistic changes
+          const local = getLocalConversations();
+          const map = new Map<string, Conversation>();
+          conversations.forEach((c) => map.set(c.id, c));
+          local.forEach((c) => {
+            if (c.participantIds?.includes(userId) && !map.has(c.id)) {
+              map.set(c.id, c);
+            }
+          });
+          const merged = Array.from(map.values());
+          merged.sort((a, b) => (b.lastMessageAt || b.updatedAt || 0) - (a.lastMessageAt || a.updatedAt || 0));
+          saveLocalConversations(merged);
+          onUpdate(merged);
         },
         (err) => {
           handleFirestoreError(err);
@@ -227,9 +225,15 @@ export const subscribeToMessages = (
           snapshot.forEach((d) => {
             messages.push({ id: d.id, ...d.data() } as Message);
           });
-          if (messages.length > 0) {
-            saveLocalMessages(conversationId, messages);
-            onUpdate(messages);
+          const local = getLocalMessages(conversationId);
+          const map = new Map<string, Message>();
+          local.forEach((m) => map.set(m.id, m));
+          messages.forEach((m) => map.set(m.id, m));
+          const merged = Array.from(map.values());
+          merged.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+          if (merged.length > 0) {
+            saveLocalMessages(conversationId, merged);
+            onUpdate(merged);
           }
         },
         (err) => {
@@ -746,8 +750,14 @@ export const sendMessage = async (
         updatedAt: now
       };
 
+      const targetConv = convs.find((c) => c.id === conversationId);
+      const participantIds = targetConv?.participantIds || (receiverId ? [senderId, receiverId] : [senderId]);
+
       const firestoreConvPayload: any = {
         id: conversationId,
+        participantIds,
+        isGroup: targetConv?.isGroup || false,
+        groupName: targetConv?.groupName || null,
         lastMessage: summary,
         lastMessageType: data.type,
         lastSenderId: senderId,

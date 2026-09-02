@@ -294,7 +294,52 @@ export const ChessGame: React.FC<ChessGameProps> = ({ gameId, onExit }) => {
     setHistorySaved(true);
   }, [game?.status, game?.winner, historySaved, profile, whitePlayerId, game]);
 
-  // Calculate legal moves for selected piece
+  // Core move execution logic (used by both click-to-move and drag-and-drop)
+  const tryExecuteMove = useCallback(
+    async (from: Square, to: Square) => {
+      if (!game || game.status !== 'active') return false;
+      if (isRobotThinking) return false;
+      if (game.mode === 'online' && !isMyTurn) return false;
+
+      // Find if this is a legal move from chess instance
+      const moves = chess.moves({ square: from, verbose: true }) as Move[];
+      const targetMove = moves.find((m) => m.to === to);
+
+      if (!targetMove) return false;
+
+      // Check for Pawn Promotion (White reaches rank 8 or Black reaches rank 1)
+      const piece = chess.get(from);
+      const isPawnPromotion =
+        piece?.type === 'p' &&
+        ((piece.color === 'w' && to[1] === '8') || (piece.color === 'b' && to[1] === '1'));
+
+      if (isPawnPromotion) {
+        setPendingPromotion({ from, to });
+        setSelectedSquare(null);
+        setValidMoves([]);
+        return true;
+      }
+
+      // Clear selection state
+      setSelectedSquare(null);
+      setValidMoves([]);
+
+      const movingPlayerId =
+        game.mode === 'offline'
+          ? activeTurnColor === 'w'
+            ? whitePlayerId
+            : blackPlayerId
+          : game.mode === 'robot'
+          ? game.currentTurn
+          : currentUserId;
+
+      await executeChessMove(game.id, from, to, undefined, movingPlayerId);
+      return true;
+    },
+    [game, isRobotThinking, isMyTurn, chess, activeTurnColor, whitePlayerId, blackPlayerId, currentUserId]
+  );
+
+  // Calculate legal moves for selected piece or attempt move
   const handleSquareClick = useCallback(
     async (square: Square) => {
       if (!game || game.status !== 'active') return;
@@ -315,46 +360,9 @@ export const ChessGame: React.FC<ChessGameProps> = ({ gameId, onExit }) => {
           return;
         }
 
-        // Check if destination is a legal move
-        const moveAttempt = validMoves.find((m) => m.to === square);
-
-        if (moveAttempt) {
-          // Check for Pawn Promotion (White reaches rank 8 or Black reaches rank 1)
-          const selectedPiece = chess.get(selectedSquare);
-          const isPawnPromotion =
-            selectedPiece?.type === 'p' &&
-            ((selectedPiece.color === 'w' && square[1] === '8') ||
-              (selectedPiece.color === 'b' && square[1] === '1'));
-
-          if (isPawnPromotion) {
-            setPendingPromotion({ from: selectedSquare, to: square });
-            setSelectedSquare(null);
-            setValidMoves([]);
-            return;
-          }
-
-          // Execute regular move
-          setSelectedSquare(null);
-          setValidMoves([]);
-
-          const movingPlayerId =
-            game.mode === 'offline'
-              ? activeTurnColor === 'w'
-                ? whitePlayerId
-                : blackPlayerId
-              : game.mode === 'robot'
-              ? game.currentTurn
-              : currentUserId;
-
-          await executeChessMove(
-            game.id,
-            selectedSquare,
-            square,
-            undefined,
-            movingPlayerId
-          );
-          return;
-        }
+        // Try executing move from selected square to clicked square
+        const moved = await tryExecuteMove(selectedSquare, square);
+        if (moved) return;
 
         // If clicked another own piece, select that piece instead
         if (isPlayerTurnColor) {
@@ -398,12 +406,9 @@ export const ChessGame: React.FC<ChessGameProps> = ({ gameId, onExit }) => {
       chess,
       activeTurnColor,
       selectedSquare,
-      validMoves,
+      tryExecuteMove,
       isUserWhite,
-      isUserBlack,
-      whitePlayerId,
-      blackPlayerId,
-      currentUserId
+      isUserBlack
     ]
   );
 
@@ -732,10 +737,14 @@ export const ChessGame: React.FC<ChessGameProps> = ({ gameId, onExit }) => {
                       key={square}
                       id={`chess-sq-${square}`}
                       onClick={() => handleSquareClick(square)}
-                      onDragOver={(e) => e.preventDefault()}
-                      onDrop={() => {
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        e.dataTransfer.dropEffect = 'move';
+                      }}
+                      onDrop={async (e) => {
+                        e.preventDefault();
                         if (draggedSquare && draggedSquare !== square) {
-                          handleSquareClick(square);
+                          await tryExecuteMove(draggedSquare, square);
                         }
                         setDraggedSquare(null);
                       }}
@@ -790,9 +799,13 @@ export const ChessGame: React.FC<ChessGameProps> = ({ gameId, onExit }) => {
                       {piece && (
                         <div
                           draggable={!isGameOver && isMyTurn}
-                          onDragStart={() => {
+                          onDragStart={(e) => {
+                            e.dataTransfer.setData('text/plain', square);
                             setDraggedSquare(square);
                             handleSquareClick(square);
+                          }}
+                          onDragEnd={() => {
+                            setDraggedSquare(null);
                           }}
                           className="w-full h-full flex items-center justify-center transition-transform hover:scale-105 active:scale-95 z-10"
                         >

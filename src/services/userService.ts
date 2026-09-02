@@ -260,8 +260,8 @@ export const updateUserProfile = async (uid: string, updates: Partial<UserProfil
 export const isUserOnline = (user?: Partial<UserProfile> | null): boolean => {
   if (!user) return false;
   const now = Date.now();
-  // If user has lastSeen within the last 10 minutes, they are active online
-  if (user.lastSeen && (now - user.lastSeen < 10 * 60 * 1000)) {
+  // If user has lastSeen within the last 15 minutes, they are active online
+  if (user.lastSeen && (now - user.lastSeen < 15 * 60 * 1000)) {
     return true;
   }
   // If explicitly flagged online and lastSeen is within 30 minutes
@@ -290,9 +290,9 @@ export const sendUserHeartbeat = async (uid: string): Promise<void> => {
     saveLocalUsers(users);
   }
 
-  // 2. Sync to Firestore (throttled to at most once every 25s per user)
+  // 2. Sync to Firestore (throttled to at most once every 15s per user)
   const lastSync = lastFirestoreHeartbeatMap.get(uid) || 0;
-  if (now - lastSync < 25000) {
+  if (now - lastSync < 15000) {
     return;
   }
 
@@ -300,11 +300,15 @@ export const sendUserHeartbeat = async (uid: string): Promise<void> => {
     try {
       lastFirestoreHeartbeatMap.set(uid, now);
       const userRef = doc(db, 'users', uid);
-      await updateDoc(userRef, {
-        isOnline: true,
-        lastSeen: now,
-        updatedAt: now
-      });
+      await setDoc(
+        userRef,
+        {
+          isOnline: true,
+          lastSeen: now,
+          updatedAt: now
+        },
+        { merge: true }
+      );
     } catch (err) {
       handleFirestoreError(err);
     }
@@ -328,11 +332,15 @@ export const setUserOnlineStatus = async (uid: string, isOnline: boolean): Promi
     try {
       lastFirestoreHeartbeatMap.set(uid, now);
       const userRef = doc(db, 'users', uid);
-      await updateDoc(userRef, {
-        isOnline,
-        lastSeen: now,
-        updatedAt: now
-      });
+      await setDoc(
+        userRef,
+        {
+          isOnline,
+          lastSeen: now,
+          updatedAt: now
+        },
+        { merge: true }
+      );
     } catch (err) {
       handleFirestoreError(err);
     }
@@ -543,15 +551,27 @@ export function subscribeToAllUsers(
     try {
       const usersRef = collection(db, 'users');
       unsubFirestore = onSnapshot(usersRef, (snapshot) => {
-        const results: UserProfile[] = [];
+        const local = getLocalUsers();
+        const map = new Map<string, UserProfile>();
+        local.forEach((u) => map.set(u.uid, u));
+
         snapshot.forEach((d) => {
           const u = d.data() as UserProfile;
           if (u && u.uid && !FAKE_UIDS.has(u.uid)) {
-            results.push(u);
+            const existing = map.get(u.uid);
+            map.set(u.uid, {
+              ...existing,
+              ...u,
+              // Keep fresher online status
+              isOnline: u.isOnline !== undefined ? u.isOnline : existing?.isOnline ?? false,
+              lastSeen: Math.max(u.lastSeen || 0, existing?.lastSeen || 0)
+            });
           }
         });
-        if (results.length > 0) {
-          saveLocalUsers(results);
+
+        const merged = Array.from(map.values());
+        if (merged.length > 0) {
+          saveLocalUsers(merged);
           notify();
         }
       }, (err) => {

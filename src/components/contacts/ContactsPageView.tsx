@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import { UserProfile } from '../../types';
 import { useAuth } from '../../contexts/AuthContext';
-import { getAllUsers, addContact, removeContact, isUserOnline, subscribeToAllUsers } from '../../services/userService';
+import { getAllUsers, addContact, removeContact, isUserOnline, subscribeToAllUsers, getUserByUsernameOrEmail } from '../../services/userService';
 import { Avatar } from '../common/Avatar';
 import { useNotifications } from '../../contexts/NotificationContext';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -38,6 +38,11 @@ export const ContactsPageView: React.FC<ContactsPageViewProps> = ({ onStartChat 
 
   useEffect(() => {
     setLoading(true);
+    getAllUsers().then((all) => {
+      setUsers(all.filter((u) => u.uid !== profile?.uid));
+      setLoading(false);
+    }).catch(() => {});
+
     const unsub = subscribeToAllUsers((all) => {
       setUsers(all.filter((u) => u.uid !== profile?.uid));
       setLoading(false);
@@ -66,10 +71,20 @@ export const ContactsPageView: React.FC<ContactsPageViewProps> = ({ onStartChat 
     setIsAdding(true);
     try {
       const clean = newContactUsername.trim().toLowerCase();
-      const targetUser = users.find((u) => u.username?.toLowerCase() === clean || u.email?.toLowerCase() === clean);
+      let targetUser = users.find((u) => u.username?.toLowerCase() === clean || u.email?.toLowerCase() === clean);
+
+      if (!targetUser) {
+        targetUser = (await getUserByUsernameOrEmail(clean)) || undefined;
+      }
 
       if (!targetUser) {
         showToast('error', 'User not found with that username or email.');
+        setIsAdding(false);
+        return;
+      }
+
+      if (targetUser.uid === profile.uid) {
+        showToast('error', 'You cannot add yourself as a contact.');
         setIsAdding(false);
         return;
       }
