@@ -5,18 +5,25 @@ import {
   GameSession, 
   GameInvitation, 
   GameHistoryItem, 
-  TicTacToeSymbol 
+  TicTacToeSymbol,
+  ChessDifficulty,
+  GameType
 } from '../../types';
 import { 
   createLocalGameSession, 
+  createLocalChessSession,
   getGameHistory, 
   subscribeToGameInvitations 
 } from '../../services/gameService';
+import { INITIAL_FEN } from '../../services/chessEngine';
 import { GamesHome } from './GamesHome';
 import { FriendModeChoiceModal } from './FriendModeChoiceModal';
 import { OfflineSetupModal } from './OfflineSetupModal';
 import { OnlineFriendSelector } from './OnlineFriendSelector';
 import { TicTacToeGame } from './TicTacToeGame';
+import { ChessGame } from './chess/ChessGame';
+import { ChessRobotSetupModal } from './chess/ChessRobotSetupModal';
+import { ChessOfflineSetupModal } from './chess/ChessOfflineSetupModal';
 import { GameHistoryModal } from './GameHistoryModal';
 
 interface GamesPageViewProps {
@@ -34,9 +41,14 @@ export const GamesPageView: React.FC<GamesPageViewProps> = ({
   // Active game session
   const [activeSession, setActiveSession] = useState<GameSession | null>(initialGameSession);
 
+  // Selected game mode context
+  const [selectedGameType, setSelectedGameType] = useState<GameType>('chess');
+
   // Modals state
   const [showFriendChoice, setShowFriendChoice] = useState(false);
-  const [showOfflineSetup, setShowOfflineSetup] = useState(false);
+  const [showTicTacToeOfflineSetup, setShowTicTacToeOfflineSetup] = useState(false);
+  const [showChessRobotSetup, setShowChessRobotSetup] = useState(false);
+  const [showChessOfflineSetup, setShowChessOfflineSetup] = useState(false);
   const [showOnlineSelector, setShowOnlineSelector] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
 
@@ -63,12 +75,17 @@ export const GamesPageView: React.FC<GamesPageViewProps> = ({
         );
         if (accepted && !activeSession) {
           // Join the game!
+          const isChess = accepted.gameType === 'chess';
+          const timerMs = 10 * 60 * 1000;
+
           setActiveSession({
             id: accepted.gameId,
             gameType: accepted.gameType,
             mode: 'online',
             playerX: accepted.senderId,
             playerO: accepted.receiverId,
+            playerWhite: accepted.senderId,
+            playerBlack: accepted.receiverId,
             playerXInfo: {
               uid: accepted.senderId,
               displayName: accepted.senderName,
@@ -79,7 +96,25 @@ export const GamesPageView: React.FC<GamesPageViewProps> = ({
               uid: accepted.receiverId,
               displayName: accepted.receiverName || 'Friend'
             },
-            board: ['', '', '', '', '', '', '', '', ''],
+            playerWhiteInfo: {
+              uid: accepted.senderId,
+              displayName: accepted.senderName,
+              photoURL: accepted.senderAvatar,
+              username: accepted.senderUsername
+            },
+            playerBlackInfo: {
+              uid: accepted.receiverId,
+              displayName: accepted.receiverName || 'Friend'
+            },
+            board: isChess ? [] : ['', '', '', '', '', '', '', '', ''],
+            fen: isChess ? INITIAL_FEN : undefined,
+            pgn: isChess ? '' : undefined,
+            chessMoveHistory: [],
+            timerInitialMinutes: isChess ? 10 : undefined,
+            whiteTimeRemaining: isChess ? timerMs : undefined,
+            blackTimeRemaining: isChess ? timerMs : undefined,
+            isClockActive: isChess,
+            lastMoveTimestamp: Date.now(),
             currentTurn: accepted.senderId,
             currentSymbol: 'X',
             starter: accepted.senderId,
@@ -99,23 +134,22 @@ export const GamesPageView: React.FC<GamesPageViewProps> = ({
     }
   }, [profile?.uid, activeSession]);
 
-  // Handler: Play with Robot AI
-  const handleStartRobotGame = () => {
+  // Handler: Start Tic-Tac-Toe Robot AI
+  const handleStartTicTacToeRobot = () => {
     const session = createLocalGameSession(
       'robot',
       profile?.displayName || 'You',
       'Robot AI',
       profile?.photoURL,
       undefined,
-      'player1',
+      profile?.uid || 'player1',
       'robot'
     );
     setActiveSession(session);
   };
 
-  // Handler: Start Offline Pass & Play
-  const handleStartOfflineGame = (p1Name: string, p2Name: string, p1Symbol: TicTacToeSymbol) => {
-    // If P1 chose 'X', P1 is playerX and starts. If P1 chose 'O', P2 is playerX and starts.
+  // Handler: Start Tic-Tac-Toe Offline Pass & Play
+  const handleStartTicTacToeOffline = (p1Name: string, p2Name: string, p1Symbol: TicTacToeSymbol) => {
     const pXName = p1Symbol === 'X' ? p1Name : p2Name;
     const pOName = p1Symbol === 'X' ? p2Name : p1Name;
 
@@ -125,10 +159,46 @@ export const GamesPageView: React.FC<GamesPageViewProps> = ({
       pOName,
       p1Symbol === 'X' ? profile?.photoURL : undefined,
       p1Symbol === 'O' ? profile?.photoURL : undefined,
-      p1Symbol === 'X' ? 'player1' : 'player2',
-      p1Symbol === 'X' ? 'player2' : 'player1'
+      p1Symbol === 'X' ? (profile?.uid || 'player1') : 'player2',
+      p1Symbol === 'X' ? 'player2' : (profile?.uid || 'player1')
     );
-    setShowOfflineSetup(false);
+    setShowTicTacToeOfflineSetup(false);
+    setActiveSession(session);
+  };
+
+  // Handler: Start Chess Robot Game
+  const handleStartChessRobot = (difficulty: ChessDifficulty, playerColor: 'w' | 'b', timerMinutes?: number) => {
+    const session = createLocalChessSession(
+      'robot',
+      profile?.displayName || 'You',
+      `Robot (${difficulty.toUpperCase()})`,
+      profile?.photoURL,
+      undefined,
+      profile?.uid || 'player1',
+      'robot',
+      playerColor,
+      difficulty,
+      timerMinutes
+    );
+    setShowChessRobotSetup(false);
+    setActiveSession(session);
+  };
+
+  // Handler: Start Chess Offline Game
+  const handleStartChessOffline = (p1Name: string, p2Name: string, p1Color: 'w' | 'b', timerMinutes?: number) => {
+    const session = createLocalChessSession(
+      'offline',
+      p1Name,
+      p2Name,
+      p1Color === 'w' ? profile?.photoURL : undefined,
+      p1Color === 'b' ? profile?.photoURL : undefined,
+      p1Color === 'w' ? (profile?.uid || 'player1') : 'player2',
+      p1Color === 'w' ? 'player2' : (profile?.uid || 'player1'),
+      p1Color,
+      'medium',
+      timerMinutes
+    );
+    setShowChessOfflineSetup(false);
     setActiveSession(session);
   };
 
@@ -141,8 +211,17 @@ export const GamesPageView: React.FC<GamesPageViewProps> = ({
     }
   };
 
-  // If inside an active game session, render the game!
+  // If inside an active game session, render the appropriate game!
   if (activeSession) {
+    if (activeSession.gameType === 'chess') {
+      return (
+        <ChessGame
+          gameId={activeSession.id}
+          onExit={handleBackToGames}
+        />
+      );
+    }
+
     return (
       <TicTacToeGame
         gameId={activeSession.id}
@@ -155,8 +234,16 @@ export const GamesPageView: React.FC<GamesPageViewProps> = ({
   return (
     <div className="w-full h-full flex flex-col relative overflow-hidden">
       <GamesHome
-        onSelectRobot={handleStartRobotGame}
-        onSelectFriends={() => setShowFriendChoice(true)}
+        onSelectTicTacToeRobot={handleStartTicTacToeRobot}
+        onSelectTicTacToeFriends={() => {
+          setSelectedGameType('tic-tac-toe');
+          setShowFriendChoice(true);
+        }}
+        onSelectChessRobot={() => setShowChessRobotSetup(true)}
+        onSelectChessFriends={() => {
+          setSelectedGameType('chess');
+          setShowFriendChoice(true);
+        }}
         onViewHistory={() => {
           if (profile?.uid) setHistory(getGameHistory(profile.uid));
           setShowHistory(true);
@@ -168,15 +255,40 @@ export const GamesPageView: React.FC<GamesPageViewProps> = ({
       <FriendModeChoiceModal
         isOpen={showFriendChoice}
         onClose={() => setShowFriendChoice(false)}
-        onSelectOffline={() => setShowOfflineSetup(true)}
-        onSelectOnline={() => setShowOnlineSelector(true)}
+        onSelectOffline={() => {
+          setShowFriendChoice(false);
+          if (selectedGameType === 'chess') {
+            setShowChessOfflineSetup(true);
+          } else {
+            setShowTicTacToeOfflineSetup(true);
+          }
+        }}
+        onSelectOnline={() => {
+          setShowFriendChoice(false);
+          setShowOnlineSelector(true);
+        }}
       />
 
-      {/* Offline Pass & Play Setup Modal */}
+      {/* Tic-Tac-Toe Offline Setup Modal */}
       <OfflineSetupModal
-        isOpen={showOfflineSetup}
-        onClose={() => setShowOfflineSetup(false)}
-        onStartGame={handleStartOfflineGame}
+        isOpen={showTicTacToeOfflineSetup}
+        onClose={() => setShowTicTacToeOfflineSetup(false)}
+        onStartGame={handleStartTicTacToeOffline}
+        defaultP1Name={profile?.displayName || 'Player 1'}
+      />
+
+      {/* Chess Robot AI Setup Modal */}
+      <ChessRobotSetupModal
+        isOpen={showChessRobotSetup}
+        onClose={() => setShowChessRobotSetup(false)}
+        onStartGame={handleStartChessRobot}
+      />
+
+      {/* Chess Offline Pass & Play Setup Modal */}
+      <ChessOfflineSetupModal
+        isOpen={showChessOfflineSetup}
+        onClose={() => setShowChessOfflineSetup(false)}
+        onStartGame={handleStartChessOffline}
         defaultP1Name={profile?.displayName || 'Player 1'}
       />
 
@@ -184,10 +296,9 @@ export const GamesPageView: React.FC<GamesPageViewProps> = ({
       <OnlineFriendSelector
         isOpen={showOnlineSelector}
         onClose={() => setShowOnlineSelector(false)}
-        onInvitationSent={(inv) => {
-          // keep open or notify
-        }}
+        onInvitationSent={() => {}}
         activeInvitations={activeInvitations}
+        gameType={selectedGameType}
       />
 
       {/* Game Match History Modal */}

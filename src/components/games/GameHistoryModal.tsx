@@ -28,7 +28,7 @@ export const GameHistoryModal: React.FC<GameHistoryModalProps> = ({
             <div>
               <h2 className="text-lg font-black text-slate-900 dark:text-white">Match History</h2>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                Your past Tic-Tac-Toe battles & results
+                Your past Chess and Tic-Tac-Toe battles & results
               </p>
             </div>
           </div>
@@ -62,6 +62,8 @@ export const GameHistoryModal: React.FC<GameHistoryModalProps> = ({
                 minute: '2-digit'
               });
 
+              const isChess = item.gameType === 'chess';
+
               return (
                 <div
                   key={item.id}
@@ -82,6 +84,7 @@ export const GameHistoryModal: React.FC<GameHistoryModalProps> = ({
 
                     <div>
                       <div className="flex items-center gap-2">
+                        <span className="text-xs">{isChess ? '♟️' : '🎮'}</span>
                         <h4 className="text-xs font-black text-slate-900 dark:text-white">
                           vs. {item.opponentName}
                         </h4>
@@ -92,8 +95,24 @@ export const GameHistoryModal: React.FC<GameHistoryModalProps> = ({
                       <p className="text-[11px] text-slate-400 dark:text-slate-500 flex items-center gap-1 mt-0.5">
                         <Calendar className="w-3 h-3" />
                         <span>{dateStr}</span>
-                        <span>•</span>
-                        <span>{item.roundsPlayed} {item.roundsPlayed === 1 ? 'round' : 'rounds'}</span>
+                        {isChess && item.movesCount !== undefined && (
+                          <>
+                            <span>•</span>
+                            <span>{item.movesCount} moves</span>
+                          </>
+                        )}
+                        {!isChess && item.roundsPlayed !== undefined && (
+                          <>
+                            <span>•</span>
+                            <span>{item.roundsPlayed} {item.roundsPlayed === 1 ? 'round' : 'rounds'}</span>
+                          </>
+                        )}
+                        {item.reason && (
+                          <>
+                            <span>•</span>
+                            <span className="capitalize">{item.reason}</span>
+                          </>
+                        )}
                       </p>
                     </div>
                   </div>

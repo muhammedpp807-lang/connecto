@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Gamepad2, 
   Check, 
@@ -12,7 +12,8 @@ import { useNotifications } from '../../contexts/NotificationContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { 
   subscribeToGameInvitations, 
-  respondToGameInvitation 
+  respondToGameInvitation,
+  getGameSession 
 } from '../../services/gameService';
 import { GameInvitation, GameSession } from '../../types';
 import { Avatar } from '../common/Avatar';
@@ -32,6 +33,7 @@ export const GameInvitationNotificationBanner: React.FC<GameInvitationNotificati
   const [incomingInv, setIncomingInv] = useState<GameInvitation | null>(null);
   const [secondsLeft, setSecondsLeft] = useState(60);
   const [isProcessing, setIsProcessing] = useState(false);
+  const handledAcceptedIds = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     if (!profile?.uid) return;
@@ -54,6 +56,22 @@ export const GameInvitationNotificationBanner: React.FC<GameInvitationNotificati
         setIncomingInv(null);
       }
 
+      // Check if any outgoing invitation was accepted by friend
+      const acceptedOutgoing = invitations.find(
+        (i) => i.senderId === profile.uid && i.status === 'accepted' && now - i.createdAt < 120000
+      );
+
+      if (acceptedOutgoing && !handledAcceptedIds.current.has(acceptedOutgoing.id)) {
+        handledAcceptedIds.current.add(acceptedOutgoing.id);
+        if (settings.sounds) playNotificationSound();
+        showToast('success', `${acceptedOutgoing.receiverName || 'Friend'} accepted your ${acceptedOutgoing.gameType === 'chess' ? 'Chess' : 'Tic-Tac-Toe'} invite! Starting match...`);
+        getGameSession(acceptedOutgoing.gameId).then((session) => {
+          if (session) {
+            onAcceptGame(session);
+          }
+        });
+      }
+
       // Check if any outgoing invitation was declined
       const declined = invitations.find(
         (i) => i.senderId === profile.uid && i.status === 'declined' && now - i.createdAt < 8000
@@ -64,7 +82,7 @@ export const GameInvitationNotificationBanner: React.FC<GameInvitationNotificati
     });
 
     return () => unsub();
-  }, [profile?.uid, settings.sounds]);
+  }, [profile?.uid, settings.sounds, onAcceptGame, showToast]);
 
   // Countdown timer effect
   useEffect(() => {
@@ -118,8 +136,8 @@ export const GameInvitationNotificationBanner: React.FC<GameInvitationNotificati
         {/* Top Info */}
         <div className="flex items-center justify-between">
           <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 text-xs font-black uppercase tracking-wider">
-            <Gamepad2 className="w-3.5 h-3.5" />
-            <span>Tic-Tac-Toe Challenge</span>
+            {incomingInv.gameType === 'chess' ? <span className="text-sm">♟️</span> : <Gamepad2 className="w-3.5 h-3.5" />}
+            <span>{incomingInv.gameType === 'chess' ? 'Chess Challenge' : 'Tic-Tac-Toe Challenge'}</span>
           </div>
 
           <div className="flex items-center gap-1 text-[11px] font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded-full">
@@ -140,7 +158,9 @@ export const GameInvitationNotificationBanner: React.FC<GameInvitationNotificati
               {incomingInv.senderName}
             </h4>
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              invited you to play a match right now!
+              {incomingInv.gameType === 'chess'
+                ? 'invited you to play Chess right now!'
+                : 'invited you to play a match right now!'}
             </p>
           </div>
         </div>

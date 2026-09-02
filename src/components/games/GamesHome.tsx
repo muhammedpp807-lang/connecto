@@ -14,15 +14,19 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { GameHistoryItem } from '../../types';
 
 interface GamesHomeProps {
-  onSelectRobot: () => void;
-  onSelectFriends: () => void;
+  onSelectTicTacToeRobot: () => void;
+  onSelectTicTacToeFriends: () => void;
+  onSelectChessRobot: () => void;
+  onSelectChessFriends: () => void;
   onViewHistory: () => void;
   history: GameHistoryItem[];
 }
 
 export const GamesHome: React.FC<GamesHomeProps> = ({
-  onSelectRobot,
-  onSelectFriends,
+  onSelectTicTacToeRobot,
+  onSelectTicTacToeFriends,
+  onSelectChessRobot,
+  onSelectChessFriends,
   onViewHistory,
   history
 }) => {
@@ -113,7 +117,89 @@ export const GamesHome: React.FC<GamesHomeProps> = ({
           </div>
         </div>
 
-        {/* Featured Game Card: Tic-Tac-Toe */}
+        {/* 1. CHESS GAME CARD */}
+        <div className="relative overflow-hidden rounded-3xl bg-white dark:bg-[#111b21] border border-slate-200 dark:border-[#1f2c34] shadow-xl p-6 sm:p-8 transition-all">
+          <div className="absolute top-0 right-0 w-80 h-80 bg-gradient-to-br from-amber-500/10 via-yellow-500/5 to-transparent rounded-full blur-3xl pointer-events-none" />
+
+          <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+            {/* Left Info */}
+            <div className="space-y-3 max-w-lg">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 text-xs font-black uppercase tracking-wider">
+                <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping" />
+                <span>Full Official Rules & AI</span>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <div className="flex items-center justify-center w-12 h-12 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 shadow-xs text-2xl select-none">
+                  ♟️
+                </div>
+                <div>
+                  <h2 className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white tracking-tight">
+                    Chess
+                  </h2>
+                  <p className="text-xs text-slate-400 dark:text-slate-500 font-semibold">
+                    Classic Chess
+                  </p>
+                </div>
+              </div>
+
+              <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed font-normal">
+                Play a complete game of chess against the Robot or your friends. Features official chess rules including castling, en passant, promotion, checkmate detection, clock timers, and difficulty levels.
+              </p>
+
+              {/* Engine badges */}
+              <div className="flex flex-wrap gap-2 pt-1">
+                <span className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-[#19242b] border border-slate-200/80 dark:border-[#2a3942] text-[11px] font-bold text-slate-600 dark:text-slate-400">
+                  ⚡ Real-Time Online
+                </span>
+                <span className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-[#19242b] border border-slate-200/80 dark:border-[#2a3942] text-[11px] font-bold text-slate-600 dark:text-slate-400">
+                  🤖 Smart AI (Easy to Expert)
+                </span>
+                <span className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-[#19242b] border border-slate-200/80 dark:border-[#2a3942] text-[11px] font-bold text-slate-600 dark:text-slate-400">
+                  ⏱️ Clocks & Move History
+                </span>
+              </div>
+            </div>
+
+            {/* Right Action Buttons */}
+            <div className="flex flex-col sm:flex-row md:flex-col gap-3 min-w-[240px]">
+              <button
+                type="button"
+                id="btn-play-chess-robot"
+                onClick={onSelectChessRobot}
+                style={{ backgroundColor: colorConfig.primaryHex }}
+                className="w-full py-4 px-6 rounded-2xl text-white font-black text-sm flex items-center justify-center gap-3 shadow-lg hover:opacity-95 active:scale-98 transition cursor-pointer group"
+              >
+                <div className="w-8 h-8 rounded-xl bg-white/20 flex items-center justify-center text-lg">
+                  🤖
+                </div>
+                <div className="text-left flex-1">
+                  <p className="font-extrabold text-sm">Play with Robot</p>
+                  <p className="text-[10px] text-white/80 font-medium">Choose Difficulty & Timer</p>
+                </div>
+                <ChevronRight className="w-5 h-5 text-white/70 group-hover:translate-x-1 transition-transform" />
+              </button>
+
+              <button
+                type="button"
+                id="btn-play-chess-friends"
+                onClick={onSelectChessFriends}
+                className="w-full py-4 px-6 rounded-2xl bg-slate-100 dark:bg-[#1f2c34] hover:bg-slate-200 dark:hover:bg-[#2a3942] text-slate-900 dark:text-white font-black text-sm flex items-center justify-center gap-3 border border-slate-200 dark:border-[#2a3942] shadow-xs active:scale-98 transition cursor-pointer group"
+              >
+                <div className="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-500 dark:text-amber-400 flex items-center justify-center text-lg">
+                  👥
+                </div>
+                <div className="text-left flex-1">
+                  <p className="font-extrabold text-sm">Play with Friends</p>
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">Online & Offline 2-Player</p>
+                </div>
+                <ChevronRight className="w-5 h-5 text-slate-400 group-hover:translate-x-1 transition-transform" />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* 2. TIC-TAC-TOE GAME CARD */}
         <div className="relative overflow-hidden rounded-3xl bg-white dark:bg-[#111b21] border border-slate-200 dark:border-[#1f2c34] shadow-xl p-6 sm:p-8 transition-all">
           <div className="absolute top-0 right-0 w-80 h-80 bg-gradient-to-br from-indigo-500/10 via-pink-500/5 to-transparent rounded-full blur-3xl pointer-events-none" />
 
@@ -162,7 +248,7 @@ export const GamesHome: React.FC<GamesHomeProps> = ({
               <button
                 type="button"
                 id="btn-play-robot"
-                onClick={onSelectRobot}
+                onClick={onSelectTicTacToeRobot}
                 style={{ backgroundColor: colorConfig.primaryHex }}
                 className="w-full py-4 px-6 rounded-2xl text-white font-black text-sm flex items-center justify-center gap-3 shadow-lg hover:opacity-95 active:scale-98 transition cursor-pointer group"
               >
@@ -179,7 +265,7 @@ export const GamesHome: React.FC<GamesHomeProps> = ({
               <button
                 type="button"
                 id="btn-play-friends"
-                onClick={onSelectFriends}
+                onClick={onSelectTicTacToeFriends}
                 className="w-full py-4 px-6 rounded-2xl bg-slate-100 dark:bg-[#1f2c34] hover:bg-slate-200 dark:hover:bg-[#2a3942] text-slate-900 dark:text-white font-black text-sm flex items-center justify-center gap-3 border border-slate-200 dark:border-[#2a3942] shadow-xs active:scale-98 transition cursor-pointer group"
               >
                 <div className="w-8 h-8 rounded-xl bg-indigo-500/10 text-indigo-500 dark:text-indigo-400 flex items-center justify-center text-lg">
@@ -211,9 +297,9 @@ export const GamesHome: React.FC<GamesHomeProps> = ({
             <div className="w-8 h-8 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold">
               🧠
             </div>
-            <h3 className="text-sm font-bold text-slate-900 dark:text-white">Smart Minimax AI</h3>
+            <h3 className="text-sm font-bold text-slate-900 dark:text-white">Smart Chess & Minimax AI</h3>
             <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-              Analyzes possible moves to counter attacks and provide a fun, strategic challenge.
+              Deep positional analysis, tactical evaluations, and adaptable difficulty levels.
             </p>
           </div>
 

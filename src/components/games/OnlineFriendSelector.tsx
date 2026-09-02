@@ -28,13 +28,15 @@ interface OnlineFriendSelectorProps {
   onClose: () => void;
   onInvitationSent: (invitation: GameInvitation) => void;
   activeInvitations: GameInvitation[];
+  gameType?: 'tic-tac-toe' | 'chess';
 }
 
 export const OnlineFriendSelector: React.FC<OnlineFriendSelectorProps> = ({
   isOpen,
   onClose,
   onInvitationSent,
-  activeInvitations
+  activeInvitations,
+  gameType = 'tic-tac-toe'
 }) => {
   const { profile } = useAuth();
   const { colorConfig } = useTheme();
@@ -64,8 +66,8 @@ export const OnlineFriendSelector: React.FC<OnlineFriendSelectorProps> = ({
 
     setInvitingUid(friend.uid);
     try {
-      const invitation = await sendGameInvitation(profile, friend, 'tic-tac-toe');
-      showToast('success', `Game invitation sent to ${friend.displayName}!`);
+      const invitation = await sendGameInvitation(profile, friend, gameType);
+      showToast('success', `${gameType === 'chess' ? 'Chess' : 'Tic-Tac-Toe'} invitation sent to ${friend.displayName}!`);
       onInvitationSent(invitation);
     } catch {
       showToast('error', 'Failed to send invitation.');
@@ -164,7 +166,7 @@ export const OnlineFriendSelector: React.FC<OnlineFriendSelectorProps> = ({
             </div>
           ) : (
             filtered.map((friend) => {
-              // Check if pending invitation exists
+              // Check if pending invitation exists between me and this friend
               const pendingInv = activeInvitations.find(
                 (inv) =>
                   inv.status === 'pending' &&
@@ -173,11 +175,20 @@ export const OnlineFriendSelector: React.FC<OnlineFriendSelectorProps> = ({
                   inv.receiverId === friend.uid
               );
 
+              // Check if friend sent me an invitation
+              const incomingFromFriend = activeInvitations.find(
+                (inv) =>
+                  inv.status === 'pending' &&
+                  inv.expiresAt > Date.now() &&
+                  inv.senderId === friend.uid &&
+                  inv.receiverId === profile?.uid
+              );
+
               // Check if friend is currently online
               const isOnline = isUserOnline(friend);
 
-              // Check if friend is currently playing
-              const isPlaying = isUserInActiveGame(friend.uid);
+              // Check if friend is currently playing in another game
+              const isPlaying = !pendingInv && !incomingFromFriend && isUserInActiveGame(friend.uid);
 
               return (
                 <div
@@ -226,12 +237,7 @@ export const OnlineFriendSelector: React.FC<OnlineFriendSelectorProps> = ({
 
                   {/* Right: Invitation Buttons */}
                   <div className="flex-shrink-0">
-                    {isPlaying ? (
-                      <span className="px-3 py-1.5 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 text-xs font-bold flex items-center gap-1 select-none">
-                        <span>🎮</span>
-                        <span>Playing</span>
-                      </span>
-                    ) : pendingInv ? (
+                    {pendingInv ? (
                       <div className="flex items-center gap-1.5">
                         <span className="px-2.5 py-1.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 text-xs font-bold flex items-center gap-1 animate-pulse">
                           <Clock className="w-3.5 h-3.5" />
@@ -246,24 +252,27 @@ export const OnlineFriendSelector: React.FC<OnlineFriendSelectorProps> = ({
                           <X className="w-4 h-4" />
                         </button>
                       </div>
+                    ) : isPlaying ? (
+                      <span className="px-3 py-1.5 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 text-xs font-bold flex items-center gap-1 select-none">
+                        <span>🎮</span>
+                        <span>Playing</span>
+                      </span>
                     ) : (
                       <button
                         type="button"
                         onClick={() => handleInvite(friend)}
                         disabled={invitingUid === friend.uid}
-                        style={{ backgroundColor: isOnline ? colorConfig.primaryHex : undefined }}
-                        className={`px-4 py-2 rounded-xl font-bold text-xs flex items-center gap-1.5 shadow-xs hover:opacity-95 active:scale-95 transition cursor-pointer disabled:opacity-50 ${
-                          isOnline
-                            ? 'text-white'
-                            : 'bg-slate-200 dark:bg-[#202c33] text-slate-700 dark:text-slate-200 hover:bg-slate-300 dark:hover:bg-[#2a3942]'
-                        }`}
+                        style={{ backgroundColor: colorConfig.primaryHex }}
+                        className={`px-4 py-2 rounded-xl font-bold text-xs flex items-center gap-1.5 shadow-xs hover:opacity-95 active:scale-95 transition cursor-pointer disabled:opacity-50 text-white`}
                       >
                         {invitingUid === friend.uid ? (
                           <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : gameType === 'chess' ? (
+                          <span className="text-sm">♟</span>
                         ) : (
                           <Gamepad2 className="w-4 h-4" />
                         )}
-                        <span>Invite to Play</span>
+                        <span>{gameType === 'chess' ? 'Invite to Chess' : 'Invite to Play'}</span>
                       </button>
                     )}
                   </div>

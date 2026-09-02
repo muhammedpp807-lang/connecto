@@ -260,16 +260,15 @@ export const updateUserProfile = async (uid: string, updates: Partial<UserProfil
 export const isUserOnline = (user?: Partial<UserProfile> | null): boolean => {
   if (!user) return false;
   const now = Date.now();
-  // If explicitly flagged online with active session
-  if (user.isOnline === true) {
-    if (user.lastSeen && (now - user.lastSeen > 15 * 60 * 1000)) {
-      return false;
-    }
+  // If user has lastSeen within the last 10 minutes, they are active online
+  if (user.lastSeen && (now - user.lastSeen < 10 * 60 * 1000)) {
     return true;
   }
-  // If isOnline was false/undefined, but lastSeen is within last 5 minutes
-  if (user.lastSeen && (now - user.lastSeen < 5 * 60 * 1000)) {
-    return true;
+  // If explicitly flagged online and lastSeen is within 30 minutes
+  if (user.isOnline === true) {
+    if (!user.lastSeen || (now - user.lastSeen < 30 * 60 * 1000)) {
+      return true;
+    }
   }
   return false;
 };
@@ -291,9 +290,9 @@ export const sendUserHeartbeat = async (uid: string): Promise<void> => {
     saveLocalUsers(users);
   }
 
-  // 2. Sync to Firestore (throttled to at most once every 45s per user to be fast & quota-safe)
+  // 2. Sync to Firestore (throttled to at most once every 25s per user)
   const lastSync = lastFirestoreHeartbeatMap.get(uid) || 0;
-  if (now - lastSync < 45000) {
+  if (now - lastSync < 25000) {
     return;
   }
 

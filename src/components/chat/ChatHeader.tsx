@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Conversation, UserProfile } from '../../types';
 import { Avatar } from '../common/Avatar';
 import { formatLastSeen } from '../../utils/dateUtils';
 import { isUserOnline } from '../../services/userService';
-import { Phone, Video, MoreVertical, ArrowLeft, Users, Info, X } from 'lucide-react';
+import { Phone, Video, MoreVertical, ArrowLeft, Users, Info, X, Gamepad2, Swords, Loader2 } from 'lucide-react';
 import { useNotifications } from '../../contexts/NotificationContext';
+import { useAuth } from '../../contexts/AuthContext';
+import { sendGameInvitation } from '../../services/gameService';
 import { GroupInfoModal } from './GroupInfoModal';
 
 interface ChatHeaderProps {
@@ -26,10 +28,40 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   onGroupUpdated,
   onLeaveGroup
 }) => {
+  const { profile } = useAuth();
   const { showToast } = useNotifications();
   const [showDetails, setShowDetails] = useState(false);
+  const [showGameMenu, setShowGameMenu] = useState(false);
+  const [isSendingGame, setIsSendingGame] = useState(false);
+  const gameMenuRef = useRef<HTMLDivElement>(null);
 
   const isGroup = conversation?.isGroup || (!recipient && Boolean(conversation?.groupName));
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (gameMenuRef.current && !gameMenuRef.current.contains(e.target as Node)) {
+        setShowGameMenu(false);
+      }
+    };
+    if (showGameMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showGameMenu]);
+
+  const handleSendInvite = async (type: 'chess' | 'tic-tac-toe') => {
+    if (!profile || !recipient || isSendingGame) return;
+    setIsSendingGame(true);
+    setShowGameMenu(false);
+    try {
+      await sendGameInvitation(profile, recipient, type);
+      showToast('success', `${type === 'chess' ? 'Chess ♟️' : 'Tic-Tac-Toe 🎮'} invite sent to ${recipient.displayName}!`);
+    } catch {
+      showToast('error', 'Could not send game invitation.');
+    } finally {
+      setIsSendingGame(false);
+    }
+  };
 
   const handleCall = () => {
     const target = isGroup ? conversation?.groupName : recipient?.displayName;
@@ -105,6 +137,60 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
 
         {/* Right: Actions */}
         <div className="flex items-center gap-1 sm:gap-2">
+          {!isGroup && recipient && (
+            <div className="relative" ref={gameMenuRef}>
+              <button
+                onClick={() => setShowGameMenu(!showGameMenu)}
+                disabled={isSendingGame}
+                className="p-2 rounded-xl text-indigo-600 dark:text-indigo-400 bg-indigo-50/70 dark:bg-indigo-950/40 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition cursor-pointer flex items-center gap-1.5"
+                title="Challenge to Game"
+                aria-label="Challenge to game"
+              >
+                {isSendingGame ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Gamepad2 className="w-4 h-4" />
+                )}
+                <span className="hidden lg:inline text-xs font-bold">Play Game</span>
+              </button>
+
+              {/* Game Choice Dropdown */}
+              {showGameMenu && (
+                <div className="absolute right-0 top-full mt-2 w-56 p-2 rounded-2xl bg-white dark:bg-[#161b22] border border-slate-200 dark:border-[#1e2530] shadow-2xl z-50 animate-in fade-in zoom-in-95 space-y-1">
+                  <div className="px-3 py-1.5 text-[11px] font-black uppercase tracking-wider text-slate-400">
+                    Challenge {recipient.displayName.split(' ')[0]}
+                  </div>
+
+                  <button
+                    onClick={() => handleSendInvite('chess')}
+                    className="w-full p-2.5 rounded-xl flex items-center gap-3 text-left hover:bg-slate-100 dark:hover:bg-[#202c33] transition cursor-pointer"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-lg font-bold">
+                      ♟
+                    </div>
+                    <div>
+                      <div className="text-xs font-bold text-slate-900 dark:text-white">Chess Match</div>
+                      <div className="text-[10px] text-slate-500">Live 10-minute online chess</div>
+                    </div>
+                  </button>
+
+                  <button
+                    onClick={() => handleSendInvite('tic-tac-toe')}
+                    className="w-full p-2.5 rounded-xl flex items-center gap-3 text-left hover:bg-slate-100 dark:hover:bg-[#202c33] transition cursor-pointer"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-base">
+                      🎮
+                    </div>
+                    <div>
+                      <div className="text-xs font-bold text-slate-900 dark:text-white">Tic-Tac-Toe</div>
+                      <div className="text-[10px] text-slate-500">Fast 3x3 match</div>
+                    </div>
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
           <button
             onClick={handleCall}
             className="p-2 rounded-xl text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-[#161b22] hover:text-slate-900 dark:hover:text-white transition cursor-pointer"
