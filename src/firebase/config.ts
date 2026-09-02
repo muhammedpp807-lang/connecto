@@ -44,23 +44,15 @@ if (isFirebaseConfigured) {
     app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
     authInstance = getAuth(app);
     
-    // Initialize Firestore with robust multi-tab cache and proper database ID
+    // Initialize Firestore with proper database ID
     const dbId = (appletConfig.firestoreDatabaseId && appletConfig.firestoreDatabaseId !== '(default)') 
       ? appletConfig.firestoreDatabaseId 
       : undefined;
 
     try {
-      dbInstance = initializeFirestore(app, {
-        localCache: persistentLocalCache({
-          tabManager: persistentMultipleTabManager()
-        })
-      }, dbId);
-    } catch {
-      try {
-        dbInstance = dbId ? getFirestore(app, dbId) : getFirestore(app);
-      } catch (errFallback) {
-        console.warn('Firestore fallback note:', errFallback);
-      }
+      dbInstance = dbId ? getFirestore(app, dbId) : getFirestore(app);
+    } catch (errFallback) {
+      console.warn('Firestore fallback note:', errFallback);
     }
 
     storageInstance = getStorage(app);

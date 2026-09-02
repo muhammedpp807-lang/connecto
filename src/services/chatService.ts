@@ -214,7 +214,8 @@ export const subscribeToMessages = (
         (snapshot) => {
           const messages: Message[] = [];
           snapshot.forEach((d) => {
-            messages.push({ id: d.id, ...d.data() } as Message);
+            const data = d.data();
+            messages.push({ id: d.id, ...data } as Message);
           });
           const local = getLocalMessages(conversationId);
           const map = new Map<string, Message>();
@@ -222,10 +223,8 @@ export const subscribeToMessages = (
           messages.forEach((m) => map.set(m.id, m));
           const merged = Array.from(map.values());
           merged.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
-          if (merged.length > 0) {
-            saveLocalMessages(conversationId, merged);
-            onUpdate(merged);
-          }
+          saveLocalMessages(conversationId, merged);
+          onUpdate(merged);
         },
         (err) => {
           handleFirestoreError(err);
@@ -701,13 +700,14 @@ export const sendMessage = async (
   }
   saveLocalConversations(convs);
 
-  // Sync to Firestore in the background
-  if (isFirebaseConfigured && db && !isFirestoreQuotaExhausted()) {
+  // Sync to Firestore in real time
+  if (isFirebaseConfigured && db) {
     try {
-      const messagesRef = collection(db, 'conversations', conversationId, 'messages');
-      const convRef = doc(db, 'conversations', conversationId);
+      const msgDocRef = doc(db, 'conversations', conversationId, 'messages', newMsgId);
+      const convDocRef = doc(db, 'conversations', conversationId);
 
       const firestoreMsgPayload: any = {
+        id: newMsgId,
         conversationId,
         senderId,
         senderName: data.senderName || null,
@@ -719,6 +719,8 @@ export const sendMessage = async (
         fileName: data.fileName || null,
         fileSize: data.fileSize || null,
         videoDuration: data.videoDuration || null,
+        audioDuration: data.audioDuration || null,
+        audioWaveform: data.audioWaveform || null,
         replyTo: data.replyTo || null,
         delivered: true,
         read: false,
@@ -734,18 +736,22 @@ export const sendMessage = async (
         participantIds,
         isGroup: targetConv?.isGroup || false,
         groupName: targetConv?.groupName || null,
+        groupAvatar: targetConv?.groupAvatar || null,
+        groupDescription: targetConv?.groupDescription || null,
+        createdBy: targetConv?.createdBy || senderId,
+        adminIds: targetConv?.adminIds || [senderId],
         lastMessage: summary,
         lastMessageType: data.type,
         lastSenderId: senderId,
         lastSenderName: data.senderName || null,
         lastMessageAt: now,
         updatedAt: now,
-        ...firestoreUnreadPayload
+        unreadCount: targetConv?.unreadCount || unreadUpdates
       };
 
       await Promise.all([
-        addDoc(messagesRef, firestoreMsgPayload),
-        setDoc(convRef, firestoreConvPayload, { merge: true })
+        setDoc(msgDocRef, firestoreMsgPayload, { merge: true }),
+        setDoc(convDocRef, firestoreConvPayload, { merge: true })
       ]);
     } catch (err) {
       handleFirestoreError(err);
